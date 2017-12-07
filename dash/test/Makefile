@@ -59,6 +59,7 @@ FILES = ArrayTest \
 				MakePatternTest \
 				MaxElementTest \
 				MinElementTest \
+				MinMaxElementTest \
 				main
 
 OBJS = $(addsuffix .o, $(FILES))

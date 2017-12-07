@@ -51,7 +51,7 @@ const ElementType * min_element(
   const ElementType * l_range_end,
   /// Element comparison function, defaults to std::less
   Compare             compare
-    = std::less<const ElementType &>())
+  = std::less<const ElementType &>())
 {
 #ifdef DASH_ENABLE_OPENMP
   typedef typename std::decay<ElementType>::type      value_t;
@@ -66,7 +66,10 @@ const ElementType * min_element(
     int           min_idx_l  = 0;
     ElementType   min_val_l  = *l_range_begin;
 
-    typedef struct min_pos_t { value_t val; size_t idx; } min_pos;
+    typedef struct min_pos_t {
+      value_t val;
+      size_t idx;
+    } min_pos;
 
     DASH_LOG_DEBUG("dash::min_element", "local range size:", l_size);
     int       align_bytes      = uloc.cache_line_size(0);
@@ -74,7 +77,7 @@ const ElementType * min_element(
                                  (align_bytes / sizeof(min_pos));
     size_t    min_vals_t_bytes = min_vals_t_size * sizeof(min_pos);
     min_pos * min_vals_t_raw   = new min_pos[min_vals_t_size];
-    void    * min_vals_t_alg   = min_vals_t_raw;
+    void   *  min_vals_t_alg   = min_vals_t_raw;
     min_pos * min_vals_t       = static_cast<min_pos *>(
                                    dash::align(
                                      align_bytes,
@@ -158,7 +161,7 @@ GlobIter<ElementType, PatternType> min_element(
   const GlobIter<ElementType, PatternType> & last,
   /// Element comparison function, defaults to std::less
   Compare                                    compare
-    = std::less<const ElementType &>())
+  = std::less<const ElementType &>())
 {
   typedef dash::GlobIter<ElementType, PatternType> globiter_t;
   typedef PatternType                               pattern_t;
@@ -262,16 +265,16 @@ GlobIter<ElementType, PatternType> min_element(
 #endif
 
   auto gmin_elem_it  = ::std::min_element(
-                           local_min_values.begin(),
-                           local_min_values.end(),
-                           [&](const local_min_t & a,
-                               const local_min_t & b) {
-                             // Ignore elements with global index -1 (no
-                             // element found):
-                             return (b.g_index < 0 ||
-                                     (a.g_index > 0 &&
-                                      compare(a.value, b.value)));
-                           });
+                         local_min_values.begin(),
+                         local_min_values.end(),
+                         [&](const local_min_t & a,
+  const local_min_t & b) {
+    // Ignore elements with global index -1 (no
+    // element found):
+    return (b.g_index < 0 ||
+            (a.g_index > 0 &&
+             compare(a.value, b.value)));
+  });
 
   if (gmin_elem_it == local_min_values.end()) {
     DASH_LOG_DEBUG_VAR("dash::min_element >", last);
@@ -327,7 +330,7 @@ GlobIter<ElementType, PatternType> max_element(
   const GlobIter<ElementType, PatternType> & last,
   /// Element comparison function, defaults to std::less
   Compare                                    compare
-    = std::greater<const ElementType &>())
+  = std::greater<const ElementType &>())
 {
   // Same as min_element with different compare function
   return dash::min_element(first, last, compare);
@@ -360,10 +363,251 @@ const ElementType * max_element(
   const ElementType * last,
   /// Element comparison function, defaults to std::less
   Compare             compare
-    = std::greater<ElementType &>())
+  = std::greater<ElementType &>())
 {
   // Same as min_element with different compare function
   return dash::min_element(first, last, compare);
+}
+
+template <
+  class ElementType,
+  class Compare = std::less<const ElementType &> >
+std::pair<const ElementType *, const ElementType *> minmax_element(
+  /// Iterator to the initial position in the sequence
+  const ElementType * first,
+  /// Iterator to the final position in the sequence
+  const ElementType * last,
+  /// Element comparison function, defaults to std::less
+  Compare             compare
+  = std::less<const ElementType &>())
+{
+  // Same as min_element with different compare function
+  return std::minmax_element(first, last, compare);
+}
+
+
+/**
+ * Finds a pair of iterators pointing to the element with the smallest and
+ * biggest vales in the range [first,last).
+ *
+ * \return      An iterator to the first occurrence of the smallest value
+ *              in the range, or \c last if the range is empty.
+ *
+ * \tparam      ElementType  Type of the elements in the sequence
+ * \tparam      Compare      Binary comparison function with signature
+ *                           \c bool (const TypeA &a, const TypeB &b)
+ *
+ * \complexity  O(d) + O(nl), with \c d dimensions in the global iterators'
+ *              pattern and \c nl local elements within the global range
+ *
+ * \ingroup     DashAlgorithms
+ */
+template <
+  class ElementType,
+  class PatternType,
+  class Compare = std::less<const ElementType &> >
+std::pair<GlobIter<ElementType, PatternType>, GlobIter<ElementType, PatternType>>
+    minmax_element(
+      /// Iterator to the initistd::pair<const ElementType *, const ElementType *>al position in the sequence
+      const GlobIter<ElementType, PatternType> & first,
+      /// Iterator to the final position in the sequence
+      const GlobIter<ElementType, PatternType> & last,
+      /// Element comparison function, defaults to std::less
+      Compare                                    compare
+      = std::less<const ElementType &>())
+{
+  typedef dash::GlobIter<ElementType, PatternType> globiter_t;
+  typedef PatternType                               pattern_t;
+  typedef typename pattern_t::index_type              index_t;
+  typedef typename std::decay<ElementType>::type      value_t;
+
+  // return last for empty array
+  if (first == last) {
+    DASH_LOG_DEBUG("dash::minmax_element >",
+                   "empty range, returning last", last);
+    return std::make_pair(last, last);
+  }
+
+  dash::util::Trace trace("minmax_element");
+
+  auto & pattern = first.pattern();
+  auto & team    = pattern.team();
+  DASH_LOG_DEBUG("dash::minmax_element()",
+                 "allocate minarr, size", team.size());
+  // Global position of end element in range:
+  auto    gi_last            = last.gpos();
+  // Find the local min. element in parallel
+  // Get local address range between global iterators:
+  auto    local_idx_range    = dash::local_index_range(first, last);
+  // Pointer to local minimum element:
+  const   ElementType * lmin = nullptr;
+  const   ElementType * lmax = nullptr;
+  // Local offset of local minimum/maximum elements, or -1 if no element found:
+  index_t l_idx_lmin         = -1;
+  index_t l_idx_lmax         = -1;
+
+  if (local_idx_range.begin == local_idx_range.end) {
+    // local range is empty
+    DASH_LOG_DEBUG("dash::min_element", "local range empty");
+  } else {
+    trace.enter_state("local");
+
+    // Pointer to first element in local memory:
+    const ElementType * lbegin        = first.globmem().lbegin();
+    // Pointers to first / final element in local range:
+    const ElementType * l_range_begin = lbegin + local_idx_range.begin;
+    const ElementType * l_range_end   = lbegin + local_idx_range.end;
+
+    std::tie(lmin, lmax) = dash::minmax_element(l_range_begin, l_range_end,
+                           compare);
+
+    if (lmin != l_range_end) {
+      DASH_LOG_TRACE_VAR("dash::min_element", *lmin);
+      // Offset of local minimum in local memory:
+      l_idx_lmin = lmin - lbegin;
+    }
+    if (lmax != l_range_end) {
+      DASH_LOG_TRACE_VAR("dash::min_element", *lmax);
+      // Offset of local minimum in local memory:
+      l_idx_lmax = lmax - lbegin;
+    }
+
+    trace.exit_state("local");
+  }
+  DASH_LOG_TRACE("dash::minmax_element",
+                 "local index of local minimum:", l_idx_lmin);
+  DASH_LOG_TRACE("dash::minmax_element",
+                 "local index of local maximum:", l_idx_lmax);
+  DASH_LOG_TRACE("dash::minmax_element",
+                 "waiting for local min of other units");
+
+  trace.enter_state("barrier");
+  team.barrier();
+  trace.exit_state("barrier");
+
+  typedef struct {
+    value_t  min_value;
+    index_t  min_g_index;
+    value_t  max_value;
+    index_t  max_g_index;
+  } local_minmax_t;
+
+  std::vector<local_minmax_t> l_minmax_values(team.size());
+
+  // Set global index of local minimum/maximum to -1 if no local minimum has been
+  // found:
+  local_minmax_t l_minmax;
+  l_minmax.min_value   = l_idx_lmin < 0
+                         ? ElementType()
+                         : *lmin;
+  l_minmax.min_g_index = l_idx_lmin < 0
+                         ? -1
+                         : pattern.global(l_idx_lmin);
+  l_minmax.max_value   = l_idx_lmax < 0
+                         ? ElementType()
+                         : *lmax;
+  l_minmax.max_g_index = l_idx_lmax < 0
+                         ? -1
+                         : pattern.global(l_idx_lmax);
+
+  DASH_LOG_TRACE("dash::minmax_element", "sending local min/max: {",
+                 "min_value:",   l_minmax.min_value,
+                 "min_g_index:", l_minmax.min_g_index,
+                 "max_value:",   l_minmax.max_value,
+                 "max_g_index:", l_minmax.max_g_index, "}");
+
+  DASH_LOG_TRACE("dash::minmax_element", "dart_allgather()");
+  trace.enter_state("allgather");
+  DASH_ASSERT_RETURNS(
+    dart_allgather(
+      &l_minmax,
+      l_minmax_values.data(),
+      sizeof(local_minmax_t),
+      DART_TYPE_BYTE,
+      team.dart_id()),
+    DART_OK);
+  trace.exit_state("allgather");
+
+#ifdef DASH_ENABLE_LOGGING
+  for (int lminmax_u = 0; lminmax_u < l_minmax_values.size(); lminmax_u++) {
+    auto lminmax_entry = l_minmax_values[lminmax_u];
+    DASH_LOG_TRACE("dash::minmax_element", "dart_allgather >",
+                   "unit:",        lminmax_u,
+                   "min_value:",   lminmax_entry.min_value,
+                   "min_g_index:", lminmax_entry.min_g_index,
+                   "max_value:",   lminmax_entry.max_value,
+                   "max_g_index:", lminmax_entry.max_g_index);
+  }
+#endif
+
+  auto gmin_elem_it  = ::std::min_element(
+                         l_minmax_values.begin(),
+                         l_minmax_values.end(),
+                         [&](const local_minmax_t & a,
+                          const local_minmax_t & b) {
+    // Ignore elements with global index -1 (no
+    // element found):
+    return (b.min_g_index < 0 ||
+            (a.min_g_index > 0 &&
+             compare(a.min_value, b.min_value)));
+  });
+  auto gmax_elem_it  = ::std::max_element(
+                         l_minmax_values.begin(),
+                         l_minmax_values.end(),
+                         [&](const local_minmax_t & a,
+                          const local_minmax_t & b) {
+    // Ignore elements with global index -1 (no
+    // element found):
+    if (b.max_g_index < 0) {
+      return false;
+    }
+    return a.max_g_index > 0 &&
+           compare(a.max_value, b.max_value);
+  });
+
+  if (gmin_elem_it == l_minmax_values.end() &&
+      gmax_elem_it == l_minmax_values.end()) {
+    DASH_LOG_DEBUG_VAR("dash::minmax_element >", last);
+    return std::make_pair(last, last);
+  }
+
+  auto gi_minimum = -1;
+  if (gmin_elem_it != l_minmax_values.end()) {
+    gi_minimum = gmin_elem_it->min_g_index;
+    DASH_LOG_TRACE("dash::minmax_element",
+                   "min. value:", gmin_elem_it->min_value,
+                   "at unit:",    (gmin_elem_it - l_minmax_values.begin()),
+                   "global idx:", gi_minimum);
+  }
+  auto gi_maximum = -1;
+  if (gmax_elem_it != l_minmax_values.end()) {
+    gi_maximum = gmax_elem_it->max_g_index;
+    DASH_LOG_TRACE("dash::minmax_element",
+                   "max. value:", gmin_elem_it->max_value,
+                   "at unit:",    (gmin_elem_it - l_minmax_values.begin()),
+                   "global idx:", gi_minimum);
+  }
+
+  globiter_t minimum = last;
+  globiter_t maximum = last;
+
+  // iterator 'first' is relative to start of input range, convert to start
+  // of its referenced container (= container.begin()), then apply global
+  // offset of minimum element:
+  DASH_LOG_TRACE_VAR("dash::minmax_element", gi_minimum);
+  if (gi_minimum >= 0) {
+    minimum = (first - first.gpos()) + gi_minimum;
+    DASH_LOG_DEBUG("dash::minmax_element>", minimum,
+                   "=", static_cast<ElementType>(*minimum));
+  }
+  DASH_LOG_TRACE_VAR("dash::minmax_element", gi_maximum);
+  if (gi_maximum >= 0) {
+    maximum = (first - first.gpos()) + gi_maximum;
+    DASH_LOG_DEBUG("dash::minmax_element>", maximum,
+                   "=", static_cast<ElementType>(*maximum));
+  }
+
+  return std::make_pair(minimum, maximum);
 }
 
 } // namespace dash
