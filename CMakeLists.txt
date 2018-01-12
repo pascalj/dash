@@ -104,6 +104,8 @@ option(ENABLE_HDF5
        "Specify whether HDF5 features are enabled" on)
 option(ENABLE_NASTYMPI
        "Specify whether the NastyMPI proxy should be enabled" off)
+option(ENABLE_ALPAKA
+        "Specify whether the Alpaka integration should be enabled" off)
 
 if (BUILD_COVERAGE_TESTS)
   set(BUILD_TESTS TRUE CACHE BOOLEAN
@@ -119,6 +121,10 @@ include(${CMAKE_SOURCE_DIR}/CMakeExt/Doxygen.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Platform.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Environment.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/StdLib.cmake)
+
+if (ENABLE_ALPAKA)
+  include(${CMAKE_SOURCE_DIR}/CMakeExt/Alpaka.cmake)
+endif()
 
 if (ENABLE_THREADSUPPORT)
   include(${CMAKE_SOURCE_DIR}/CMakeExt/Threading.cmake)

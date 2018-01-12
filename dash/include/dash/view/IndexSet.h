@@ -671,7 +671,7 @@ class IndexSetSub
            );
   }
 
-  constexpr size_type extent(std::size_t shape_dim) const {
+  size_type extent(std::size_t shape_dim) const {
     return ( shape_dim == SubDim
              ? _domain_end_idx - _domain_begin_idx
              : this->domain().extent(shape_dim)

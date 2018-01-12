@@ -293,7 +293,7 @@ public:
   /**
    * Copy constructor.
    */
-  constexpr BlockPattern(const self_t & other) = default;
+  BlockPattern(const self_t & other) = default;
 
   /**
    * Copy constructor using non-const lvalue reference parameter.
@@ -667,7 +667,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr IndexType global(
+  IndexType global(
     IndexType l_index) const
   {
     return global(_team->myid(), std::array<IndexType, 1> {{ l_index }})[0];

@@ -16,6 +16,10 @@
 #include <omp.h>
 #endif
 
+#ifdef DASH_ENABLE_ALPAKA
+#include <alpaka/alpaka.hpp>
+#endif
+
 
 namespace dash {
 
@@ -77,6 +81,18 @@ void fill(
 #endif
 #endif
 }
+
+  namespace alpaka {
+
+    template <typename GlobIterType>
+    void fill(
+      GlobIterType  first,
+      GlobIterType  last,
+      const typename GlobIterType::value_type value_t)
+    {
+
+    }
+  }
 
 } // namespace dash
 

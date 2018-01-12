@@ -370,10 +370,9 @@ foreach (dart_variant ${DART_IMPLEMENTATIONS_LIST})
          ${CMAKE_CURRENT_SOURCE_DIR}/examples/${examplename}/main.cpp)
 
         # Build example for single DART implementation
-        add_executable(
+        ALPAKA_ADD_EXECUTABLE(
           ${exampletarget}
-          examples/${examplename}/main.cpp
-        )
+          examples/${examplename}/main.cpp)
         include_directories(
           ${CMAKE_SOURCE_DIR}/dash/include
           ${ADDITIONAL_INCLUDES}
