@@ -15,6 +15,12 @@
 #include <dash/dart/if/dart_util.h>
 #include <dash/dart/if/dart_types.h>
 
+// make sure dynamic windows are enabled if shared windows are not disabled
+#if !defined(DART_MPI_DISABLE_SHARED_WINDOWS) && \
+    !defined(DART_MPI_ENABLE_DYNAMIC_WINDOWS)
+#define DART_MPI_ENABLE_DYNAMIC_WINDOWS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -318,7 +324,7 @@ dart_ret_t dart_memfree(dart_gptr_t gptr) DART_NOTHROW;
  */
 dart_ret_t dart_team_memalloc_aligned(
   dart_team_t       teamid,
-	size_t            nelem,
+  size_t            nelem,
   dart_datatype_t   dtype,
   dart_gptr_t     * gptr) DART_NOTHROW;
 
@@ -362,10 +368,10 @@ dart_ret_t dart_team_memfree(
  */
 dart_ret_t dart_team_memregister_aligned(
   dart_team_t       teamid,
-	size_t            nelem,
+  size_t            nelem,
   dart_datatype_t   dtype,
-	void            * addr,
-	dart_gptr_t     * gptr) DART_NOTHROW;
+  void            * addr,
+  dart_gptr_t     * gptr) DART_NOTHROW;
 
 /**
  * Collective function, attaches external memory previously allocated by
@@ -386,10 +392,10 @@ dart_ret_t dart_team_memregister_aligned(
  */
 dart_ret_t dart_team_memregister(
   dart_team_t       teamid,
-	size_t            nlelem,
+  size_t            nlelem,
   dart_datatype_t   dtype,
-	void            * addr,
-	dart_gptr_t     * gptr) DART_NOTHROW;
+  void            * addr,
+  dart_gptr_t     * gptr) DART_NOTHROW;
 
 /**
  * Collective function similar to dart_team_memfree() but on previously

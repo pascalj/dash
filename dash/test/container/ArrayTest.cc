@@ -4,6 +4,7 @@
 #include <dash/Array.h>
 
 #include <dash/algorithm/ForEach.h>
+#include <dash/algorithm/Fill.h>
 
 #include <dash/pattern/BlockPattern1D.h>
 #include <dash/pattern/TilePattern1D.h>
@@ -16,6 +17,11 @@
 dash::Array<int> array_global;
 
 TEST_F(ArrayTest, Declaration)
+{
+  dash::Array<int> arr;
+}
+
+TEST_F(ArrayTest, Initialization)
 {
   dash::Array<int> array_local(19 * dash::size(), dash::BLOCKED);
 }
@@ -230,3 +236,72 @@ TEST_F(ArrayTest, TeamSplit)
   team_all.barrier();
 }
 
+TEST_F(ArrayTest, MoveSemantics){
+  using array_t = dash::Array<double>;
+  // move construction
+  {
+    array_t array_a(10);
+
+    *(array_a.lbegin()) = 5;
+    dash::barrier();
+
+    array_t array_b(std::move(array_a));
+    int value = *(array_b.lbegin());
+    ASSERT_EQ_U(value, 5);
+  }
+  dash::barrier();
+  //move assignment
+  {
+    array_t array_a(10);
+    {
+      array_t array_b(8);
+
+      *(array_a.lbegin()) = 1;
+      *(array_b.lbegin()) = 2;
+      array_a = std::move(array_b);
+      // leave scope of array_b
+    }
+    ASSERT_EQ_U(*(array_a.lbegin()), 2);
+  }
+  dash::barrier();
+  // swap
+  {
+    array_t array_a(10);
+    array_t array_b(8);
+
+    *(array_a.lbegin()) = 1;
+    *(array_b.lbegin()) = 2;
+
+    std::swap(array_a, array_b);
+    ASSERT_EQ_U(*(array_a.lbegin()), 2);
+    ASSERT_EQ_U(*(array_b.lbegin()), 1);
+  }
+}
+
+TEST_F(ArrayTest, ElementCompare){
+  using value_t = int;
+  using array_t = dash::Array<value_t>;
+
+  if(dash::size() < 2){
+    SKIP_TEST();
+  }
+
+  array_t arr(dash::size());
+
+  dash::fill(arr.begin(), arr.end(), 0);
+  arr.barrier();
+
+  ASSERT_EQ_U(arr[0], arr[1]);
+
+  ASSERT_EQ_U(0, arr[dash::myid()]);
+  ASSERT_EQ_U(arr[dash::myid()], 0);
+  ASSERT_EQ_U(arr[dash::myid()], 0UL);
+
+  dash::barrier();
+  arr[dash::myid()] = dash::myid();
+  ASSERT_EQ_U(dash::myid(), arr[dash::myid()]);
+  dash::barrier();
+  if (dash::myid() > 0) {
+    ASSERT_NE_U(arr[0], arr[dash::myid()]);
+  }
+}

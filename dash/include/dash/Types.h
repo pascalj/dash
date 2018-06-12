@@ -140,11 +140,6 @@ struct dart_datatype<unsigned int> {
 };
 
 template<>
-struct dart_datatype<float> {
-  static constexpr const dart_datatype_t value = DART_TYPE_FLOAT;
-};
-
-template<>
 struct dart_datatype<long> {
   static constexpr const dart_datatype_t value = DART_TYPE_LONG;
 };
@@ -155,9 +150,35 @@ struct dart_datatype<unsigned long> {
 };
 
 template<>
+struct dart_datatype<long long> {
+  static constexpr const dart_datatype_t value = DART_TYPE_LONGLONG;
+};
+
+template<>
+struct dart_datatype<unsigned long long> {
+  static constexpr const dart_datatype_t value = DART_TYPE_ULONGLONG;
+};
+
+template<>
+struct dart_datatype<float> {
+  static constexpr const dart_datatype_t value = DART_TYPE_FLOAT;
+};
+
+template<>
 struct dart_datatype<double> {
   static constexpr const dart_datatype_t value = DART_TYPE_DOUBLE;
 };
+
+template<>
+struct dart_datatype<long double> {
+  static constexpr const dart_datatype_t value = DART_TYPE_LONG_DOUBLE;
+};
+
+template<typename T>
+struct dart_datatype<const    T> : public dart_datatype<T> { };
+
+template<typename T>
+struct dart_datatype<volatile T> : public dart_datatype<T> { };
 
 
 namespace internal {
@@ -212,13 +233,10 @@ template <class T>
 struct is_container_compatible :
   public std::integral_constant<bool,
               std::is_standard_layout<T>::value
-#if ( !defined(__CRAYC) && !defined(__GNUC__) ) || \
-    ( defined(__GNUG__) && __GNUC__ >= 5 )
-              // The Cray compiler (as of CCE8.5.6) does not support
-              // std::is_trivially_copyable.
-           && std::is_trivially_copyable<T>::value
-#elif defined(__GNUG__) && __GNUC__ < 5
-           && std::has_trivial_copy_constructor<T>::value
+#ifdef DASH_HAVE_STD_TRIVIALLY_COPYABLE
+              && std::is_trivially_copyable<T>::value
+#elif defined DASH_HAVE_TRIVIAL_COPY_INTRINSIC
+              && __has_trivial_copy(T)
 #endif
          >
 { };
@@ -229,11 +247,7 @@ struct is_container_compatible :
  */
 template <typename T>
 struct is_atomic_compatible
-: public std::integral_constant<
-           bool,
-              dash::is_container_compatible<T>::value
-           && sizeof(T) <= sizeof(std::size_t)
-         >
+: public std::integral_constant<bool, std::is_arithmetic<T>::value>
 { };
 
 /**
@@ -269,18 +283,25 @@ struct has_operator_equal_impl
 template<class T, class EqualTo = T>
 struct has_operator_equal : has_operator_equal_impl<T, EqualTo>::type {};
 
+/**
+ * Convencience wrapper to determine the DART type and number of elements
+ * required for the given template parameter type \c T and the desired number of
+ * values \c nvalues.
+ */
+template<typename T>
+struct dart_storage {
+                   const size_t          nelem;
+  static constexpr const dart_datatype_t dtype =
+                                (dart_datatype<T>::value == DART_TYPE_UNDEFINED)
+                                  ? DART_TYPE_BYTE : dart_datatype<T>::value;
 
-template <typename T>
-inline dart_storage_t dart_storage(int nvalues) {
-  dart_storage_t ds;
-  ds.dtype = dart_datatype<T>::value;
-  ds.nelem = nvalues;
-  if (DART_TYPE_UNDEFINED == ds.dtype) {
-    ds.dtype = DART_TYPE_BYTE;
-    ds.nelem = nvalues * sizeof(T);
-  }
-  return ds;
-}
+  constexpr
+  dart_storage(size_t nvalues) noexcept
+  : nelem(
+      (dart_datatype<T>::value == DART_TYPE_UNDEFINED)
+      ? nvalues * sizeof(T) : nvalues)
+  { }
+};
 
 /**
  * Unit ID to use for team-local IDs.

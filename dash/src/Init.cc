@@ -51,7 +51,11 @@ void dash::init(int * argc, char ** *argv)
 
   dash::_initialized = true;
 
+  // initialize global team
+  dash::Team::initialize();
+
   if (dash::util::Config::get<bool>("DASH_INIT_BREAKPOINT")) {
+    DASH_LOG_DEBUG("Process ID", getpid());
     if (dash::myid() == 0) {
       int blockvar = 1;
       dash::prevent_opt_elimination(blockvar);
@@ -117,7 +121,7 @@ dash::global_unit_t dash::myid()
   return dash::Team::GlobalUnitID();
 }
 
-ssize_t dash::size()
+size_t dash::size()
 {
   return dash::Team::All().size();
 }

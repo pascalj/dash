@@ -23,6 +23,9 @@ endif(POLICY CMP0004)
 if(POLICY CMP0016)
   cmake_policy(SET CMP0016 OLD)
 endif(POLICY CMP0016)
+if(POLICY CMP0058)
+  cmake_policy(SET CMP0058 NEW)
+endif()
 
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   set(DEFAULT_COMPTIME_RED on)
@@ -33,6 +36,8 @@ endif()
 ## Build options
 option(BUILD_TESTS
        "Whether tests should be built" on)
+option(INSTALL_TESTS
+       "Whether tests should be installed" off)
 option(BUILD_COVERAGE_TESTS
        "Whether tests are built with code coverage (lcov) support.
         Implies BUILD_TESTS. Requires GCC." off)
@@ -73,6 +78,8 @@ option(ENABLE_UNIFIED_MEMORY_MODEL
        "Specify whether to assume unified memory model" on)
 option(ENABLE_SHARED_WINDOWS
        "Specify whether shared memory features are enabled" on)
+option(ENABLE_DYNAMIC_WINDOWS
+       "Specify whether to use dynamic MPI windows for collective allocation" on)
 option(ENABLE_DEFAULT_INDEX_TYPE_LONG
        "Specify whether to use int64_t as default index type" on)
 option(ENABLE_LIBNUMA
@@ -101,6 +108,10 @@ option(ENABLE_NASTYMPI
        "Specify whether the NastyMPI proxy should be enabled" off)
 
 if (BUILD_COVERAGE_TESTS)
+  include(${CMAKE_SOURCE_DIR}/CMakeExt/CodeCoverage.cmake)
+  # This has to be done globally as otherwise linking might fail
+  append_coverage_compiler_flags()
+
   set(BUILD_TESTS TRUE CACHE BOOLEAN
       "Whether tests are built with code coverage (lcov) support.
        Implies BUILD_TESTS. Requires GCC." on)
@@ -113,6 +124,7 @@ include(${CMAKE_SOURCE_DIR}/CMakeExt/FileSystem.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Doxygen.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Platform.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Environment.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/StdLib.cmake)
 
 if (ENABLE_THREADSUPPORT)
   include(${CMAKE_SOURCE_DIR}/CMakeExt/Threading.cmake)
@@ -224,6 +236,8 @@ add_subdirectory(dart-impl)
 
 add_subdirectory(dash)
 
+include(${CMAKE_SOURCE_DIR}/CMakeExt/GenerateDASHCXX.cmake)
+
 ## Documentation
 if (BUILD_DOCS)
   CreateDoxygenTarget()
@@ -239,6 +253,9 @@ message(EMPH "Generic build:            (BUILD_GENERIC)                  "
         ${BUILD_GENERIC})
 message(EMPH "Build shared libraries:   (BUILD_SHARED_LIBS)              "
         ${BUILD_SHARED_LIBS})
+
+message(INFO "Build tests:              (BUILD_TESTS)                    "
+        ${BUILD_TESTS})
 
 message(INFO "Host system identifier:   (ENVIRONMENT_TYPE)               "
         ${DASH_ENV_HOST_SYSTEM_ID})
@@ -264,6 +281,8 @@ message(INFO "Unified RMA memory model: (ENABLE_UNIFIED_MEMORY_MODEL)    "
         ${ENABLE_UNIFIED_MEMORY_MODEL})
 message(INFO "MPI shared windows:       (ENABLE_SHARED_WINDOWS)          "
         ${ENABLE_SHARED_WINDOWS})
+message(INFO "MPI dynamic windows:      (ENABLE_DYNAMIC_WINDOWS)         "
+        ${ENABLE_DYNAMIC_WINDOWS})
 message(INFO "Enable multithreading:    (ENABLE_THREADSUPPORT)           "
         ${ENABLE_THREADSUPPORT})
 message(INFO "Default index type long:  (ENABLE_DEFAULT_INDEX_TYPE_LONG) "
@@ -292,7 +311,7 @@ message(INFO "Enabled DART backends:    (DART_IMPLEMENTATIONS)           "
         ${DART_IMPLEMENTATIONS})
 message(INFO "C   compiler id:          ${CMAKE_C_COMPILER_ID}")
 message(INFO "C++ compiler id:          ${CMAKE_CXX_COMPILER_ID}")
-if (MPI_FOUND)
+if (DEFINED MPI_IMPL_ID)
   message(INFO "MPI implementation:       " ${MPI_IMPL_ID})
 endif()
 
@@ -391,4 +410,12 @@ endif()
 if (ENABLE_NASTYMPI)
     message(INFO "NastyMPI                  enabled")
 endif()
-
+if (BUILD_TESTS)
+  if (GTEST_FOUND)
+    message(INFO "googletest                enabled")
+  else()
+    message(NOTE "googletest                not found")
+  endif()
+else()
+  message(NOTE "googletest                disabled")
+endif()

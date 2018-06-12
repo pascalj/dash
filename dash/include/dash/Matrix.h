@@ -158,16 +158,6 @@ private:
     Pattern_t;
   typedef GlobStaticMem<ElementT, dash::allocator::SymmetricAllocator<ElementT>>
     GlobMem_t;
-  typedef DistributionSpec<NumDimensions>
-    DistributionSpec_t;
-  typedef SizeSpec<NumDimensions, typename PatternT::size_type>
-    SizeSpec_t;
-  typedef TeamSpec<NumDimensions, typename PatternT::index_type>
-    TeamSpec_t;
-  typedef std::array<typename PatternT::size_type, NumDimensions>
-    Extents_t;
-  typedef std::array<typename PatternT::index_type, NumDimensions>
-    Offsets_t;
 
 public:
   template<
@@ -195,14 +185,25 @@ public:
   typedef std::reverse_iterator<iterator>                 reverse_iterator;
   typedef std::reverse_iterator<const_iterator>     const_reverse_iterator;
 
-  typedef GlobRef<      value_type>                              reference;
-  typedef GlobRef<const value_type>                        const_reference;
+  typedef          GlobRef<value_type>                           reference;
+  typedef typename GlobRef<value_type>::const_type         const_reference;
 
   typedef GlobIter<      value_type, Pattern_t>                    pointer;
   typedef GlobIter<const value_type, Pattern_t>              const_pointer;
 
   typedef       ElementT *                                   local_pointer;
   typedef const ElementT *                             const_local_pointer;
+
+  typedef DistributionSpec<NumDimensions>                distribution_spec;
+  typedef SizeSpec<NumDimensions, typename PatternT::size_type>
+    size_spec;
+  typedef TeamSpec<NumDimensions, typename PatternT::index_type>
+    team_spec;
+  typedef std::array<typename PatternT::size_type, NumDimensions>
+    extents_type;
+  typedef std::array<typename PatternT::index_type, NumDimensions>
+    offsets_type;
+
 
 // Public types as required by dash container concept
 public:
@@ -231,6 +232,9 @@ public:
   template <dim_t NumViewDim>
     using const_view_type =
           MatrixRef<const ElementT, NumDimensions, NumViewDim, PatternT>;
+
+// public types exposed in Matrix interface
+public:
 
 public:
   /// Local view proxy object.
@@ -274,42 +278,34 @@ public:
    * Sets the associated team to DART_TEAM_NULL for global matrix instances
    * that are declared before \ref dash::Init().
    */
+  explicit
   Matrix(
     Team & team = dash::Team::Null());
 
   /**
    * Constructor, creates a new instance of Matrix.
    */
+  explicit
   Matrix(
-    const SizeSpec_t         & ss,
-    const DistributionSpec_t & ds  = DistributionSpec_t(),
-    Team                     & t   = dash::Team::All(),
-    const TeamSpec_t         & ts  = TeamSpec_t());
+    const size_spec         & ss,
+    const distribution_spec & ds  = distribution_spec(),
+    Team                    & t   = dash::Team::All(),
+    const team_spec         & ts  = team_spec());
 
   /**
    * Constructor, creates a new instance of Matrix from a pattern instance.
    */
+  explicit
   Matrix(
     const PatternT & pat);
-
-  /**
-   * Constructor, creates a new instance of Matrix.
-   */
-  Matrix(
-    /// Number of elements
-    size_t nelem,
-    /// Team containing all units operating on the Matrix instance
-    Team & t = dash::Team::All())
-  : Matrix(PatternT(nelem, t))
-  { }
 
   /**
    * Constructor, creates a new instance of Matrix
    * of given extents.
    */
   template<typename... Args>
-  Matrix(SizeType arg, Args... args)
-  : Matrix(PatternT(arg, args... ))
+  Matrix(SizeType arg, Args&&... args)
+  : Matrix(PatternT(arg, std::forward<Args>(args)...))
   { }
 
   /**
@@ -318,9 +314,24 @@ public:
   Matrix(const self_t &) = delete;
 
   /**
+   * Move-constructor, supported
+   */
+  Matrix(self_t && other);
+
+  /**
    * Destructor, frees underlying memory.
    */
   ~Matrix();
+
+  /**
+   * Copy-assignment operator, deleted.
+   */
+  self_t & operator=(const self_t & other) = delete;
+
+  /**
+   * Move-assignment operator, supported.
+   */
+  self_t & operator=(self_t && other);
 
   /**
    * View at block at given global block coordinates.
@@ -341,10 +352,10 @@ public:
    * \see  DashContainerConcept
    */
   bool allocate(
-    const SizeSpec_t         & sizespec,
-    const DistributionSpec_t & distribution,
-    const TeamSpec_t         & teamspec,
-    dash::Team               & team = dash::Team::All()
+    const size_spec         & sizespec,
+    const distribution_spec & distribution,
+    const team_spec         & teamspec,
+    dash::Team              & team = dash::Team::All()
   );
 
   /**
@@ -355,6 +366,18 @@ public:
     const PatternT & pattern
   );
 
+
+  /**
+   * Allocation and distribution of matrix elements as specified by given
+   * extents. See variadic constructor.
+   */
+  template<typename... Args>
+  bool
+  allocate(SizeType arg, Args... args)
+  {
+    return allocate(PatternT(arg, args... ));
+  }
+
   /**
    * Explicit deallocation of matrix elements, called implicitly in
    * destructor and team deallocation.
@@ -363,15 +386,15 @@ public:
    */
   void deallocate();
 
-  Team                      & team();
+  constexpr Team            & team()                const noexcept;
 
   constexpr size_type         size()                const noexcept;
   constexpr size_type         local_size()          const noexcept;
   constexpr size_type         local_capacity()      const noexcept;
   constexpr size_type         extent(dim_t dim)     const noexcept;
-  constexpr Extents_t         extents()             const noexcept;
+  constexpr extents_type      extents()             const noexcept;
   constexpr index_type        offset(dim_t dim)     const noexcept;
-  constexpr Offsets_t         offsets()             const noexcept;
+  constexpr offsets_type      offsets()             const noexcept;
   constexpr bool              empty()               const noexcept;
 
   /**
@@ -382,30 +405,32 @@ public:
   inline void                 barrier() const;
 
   /**
-   * Complete all outstanding non-blocking operations executed by all units
-   * on the array's underlying global memory.
+   * Complete all outstanding non-blocking operations to all units
+   * on the container's underlying global memory.
    *
    * \see  DashContainerConcept
    */
   inline void                 flush();
 
   /**
-   * Complete all outstanding non-blocking operations executed by the
-   * local unit on the narray's underlying global memory.
+   * Complete all outstanding non-blocking operations to the specified unit
+   * on the container's underlying global memory.
+   *
+   * \see  DashContainerConcept
+   */
+  inline void                 flush(dash::team_unit_t target);
+
+  /**
+   * Locally complete all outstanding non-blocking operations to all units
+   * on the container's underlying global memory.
    */
   inline void                 flush_local();
 
   /**
-   * Complete all outstanding non-blocking operations executed by all units
-   * on the narray's underlying global memory.
+   * Locally complete all outstanding non-blocking operations to the specified
+   * unit on the container's underlying global memory.
    */
-  inline void                 flush_all();
-
-  /**
-   * Complete all outstanding non-blocking operations executed by the
-   * local unit on the narray's underlying global memory.
-   */
-  inline void                 flush_local_all();
+  inline void                 flush_local(dash::team_unit_t target);
 
   /**
    * The pattern used to distribute matrix elements to units in its
@@ -485,7 +510,7 @@ public:
   constexpr operator[](
     size_type n       ///< Offset in highest matrix dimension.
   ) const;
-  
+
   /**
    * Subscript operator, returns a \ref GlobRef if matrix has only one dimension
    */

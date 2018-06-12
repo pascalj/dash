@@ -16,7 +16,6 @@
 #include <iomanip>
 
 
-
 TEST_F(MatrixTest, OddSize)
 {
   typedef dash::Pattern<2>                 pattern_t;
@@ -866,9 +865,9 @@ TEST_F(MatrixTest, DelayedAlloc)
         extent_j,
         extent_k),
       dash::DistributionSpec<3>(
-        num_units_i < 2 ? dash::NONE : dash::TILE(tilesize_i),
-        num_units_j < 2 ? dash::NONE : dash::TILE(tilesize_j),
-        num_units_k < 2 ? dash::NONE : dash::TILE(tilesize_k)),
+        dash::TILE(tilesize_i),
+        dash::TILE(tilesize_j),
+        dash::TILE(tilesize_k)),
       teamspec
   );
 
@@ -965,6 +964,20 @@ TEST_F(MatrixTest, DelayedAlloc)
       }
     }
   }
+
+
+  // re-allocate to test variadic allocate
+  mx.deallocate();
+
+  mx.allocate(
+    extent_i,
+    extent_j,
+    extent_k,
+    dash::TILE(tilesize_i),
+    dash::TILE(tilesize_j),
+    dash::TILE(tilesize_k),
+    teamspec
+  );
 }
 
 TEST_F(MatrixTest, PatternScope)
@@ -1447,6 +1460,48 @@ TEST_F(MatrixTest, ConstMatrixRefs)
   EXPECT_EQ_U(global_range_sum, global_elems_sum);
 }
 
+
+TEST_F(MatrixTest, LocalMatrixRefs)
+{
+  using value_t = unsigned int;
+  using uint    = unsigned int;
+
+  uint myid = static_cast<uint>(dash::Team::GlobalUnitID().id);
+
+  const uint nelts = 40;
+
+  dash::NArray<value_t, 2> mat(nelts, nelts);
+
+  for (int i = 0; i < mat.local.extent(0); ++i) {
+    auto lref = mat.local[i];
+    for (int j = 0; j < mat.local.extent(1); ++j) {
+      lref[j] = i*1000 + j;
+    }
+  }
+
+  // full operator(...)
+  for (int i = 0; i < mat.local.extent(0); ++i) {
+    for (int j = 0; j < mat.local.extent(1); ++j) {
+      ASSERT_EQ_U(mat.local(i, j), i*1000 + j);
+    }
+  }
+
+  // partial operator(...)
+  for (int i = 0; i < mat.local.extent(0); ++i) {
+    auto lref = mat.local[i];
+    for (int j = 0; j < mat.local.extent(1); ++j) {
+      ASSERT_EQ_U(lref(j), i*1000 + j);
+    }
+  }
+
+  // lbegin, lend
+  int cnt = 0;
+  for (auto i = mat.local.lbegin(); i != mat.local.lend(); ++i) {
+      ASSERT_EQ_U(*i, (cnt / nelts)*1000 + (cnt % nelts));
+      ++cnt;
+  }
+}
+
 TEST_F(MatrixTest, SubViewMatrix3Dim)
 {
   int dim_0_ext  = dash::size();
@@ -1517,6 +1572,99 @@ TEST_F(MatrixTest, SubViewMatrix3Dim)
       double val = *it;
     }
     EXPECT_EQ_U(visited, sub_0_size);
+  }
+}
+
+TEST_F(MatrixTest, MoveSemantics){
+  using matrix_t = dash::NArray<double, 2>;
+  // move construction
+  {
+    matrix_t matrix_a(10, 5);
+
+    *(matrix_a.lbegin()) = 5;
+    dash::barrier();
+
+    matrix_t matrix_b(std::move(matrix_a));
+    int value = *(matrix_b.lbegin());
+    ASSERT_EQ_U(value, 5);
+  }
+  dash::barrier();
+  //move assignment
+  {
+    matrix_t matrix_a(10, 5);
+    {
+      matrix_t matrix_b(8, 5);
+
+      *(matrix_a.lbegin()) = 1;
+      *(matrix_b.lbegin()) = 2;
+      matrix_a = std::move(matrix_b);
+      // leave scope of matrix_b
+    }
+    ASSERT_EQ_U(*(matrix_a.lbegin()), 2);
+  }
+  dash::barrier();
+  // swap
+  {
+    matrix_t matrix_a(10, 5);
+    matrix_t matrix_b(8, 5);
+
+    *(matrix_a.lbegin()) = 1;
+    *(matrix_b.lbegin()) = 2;
+
+    std::swap(matrix_a, matrix_b);
+    ASSERT_EQ_U(*(matrix_a.lbegin()), 2);
+    ASSERT_EQ_U(*(matrix_b.lbegin()), 1);
+  }
+}
+
+// test for issue 532
+TEST_F(MatrixTest, LocalDiagonal){
+  dash::TeamSpec<2> ts(dash::size(), 1);
+  ts.balance_extents();
+
+  auto ext_per_unit = 5;
+  auto tilesize     = 4;
+  auto tile         = dash::TILE(tilesize);
+  auto global_ext   = ext_per_unit*tilesize;
+
+  dash::NArray<int, 2, dash::default_index_t, dash::TilePattern<2>> mat(global_ext, global_ext, tile, tile, ts);
+
+  // fill with neutral value -1
+  dash::fill(mat.begin(), mat.end(), -1);
+  mat.barrier();
+
+  // set the diagonal
+  for (size_t i = 0; i < mat.extent(0); ++i) {
+    if (mat(i, i).is_local()){
+      DASH_LOG_DEBUG("Element is local (i,i)", i, i);
+      mat(i, i) = dash::myid();
+    }
+  }
+  mat.barrier();
+
+  // check that local range only contains zero or unitid
+  auto local_size   = mat.local_size();
+  if(local_size > 0){
+    LOG_MESSAGE("Validate local memory");
+    for(int i=0; i<local_size; ++i){
+      int  value    = *(mat.lbegin()+i);
+      bool valid    = (value == -1) || (value == dash::myid().id);
+      ASSERT_EQ_U(valid, true);
+    }
+  } else {
+    LOG_MESSAGE("No local elements");
+  }
+  // check global diagonal
+  LOG_MESSAGE("Validate global diagonal");
+  const auto & pattern = mat.pattern();
+  for(int i=0; i<mat.extent(0); ++i){
+    int value_fort = mat(i,i);  // fortran style
+    int value_sub  = mat[i][i]; // c-array style
+    ASSERT_EQ_U(value_fort, value_sub);
+    // check if diag value equals owner-unit-id
+    int unit = pattern.local({i,i}).unit;
+    DASH_LOG_DEBUG("Owning Unit (i,i,unit)", i, i, unit);
+    ASSERT_EQ_U(value_sub, unit);
   }
 }
 

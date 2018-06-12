@@ -1,7 +1,6 @@
 #ifndef DASH__TILE_PATTERN_H_
 #define DASH__TILE_PATTERN_H_
 
-#include <assert.h>
 #include <functional>
 #include <cstring>
 #include <array>
@@ -85,9 +84,9 @@ private:
     MemoryLayout_t;
   typedef CartesianIndexSpace<NumDimensions, Arrangement, IndexType>
     LocalMemoryLayout_t;
-  typedef CartesianIndexSpace<NumDimensions, Arrangement, SizeType>
+  typedef CartesianIndexSpace<NumDimensions, Arrangement, IndexType>
     BlockSpec_t;
-  typedef CartesianIndexSpace<NumDimensions, Arrangement, SizeType>
+  typedef CartesianIndexSpace<NumDimensions, Arrangement, IndexType>
     BlockSizeSpec_t;
   typedef DistributionSpec<NumDimensions>
     DistributionSpec_t;
@@ -255,7 +254,6 @@ public:
         _teamspec)),
     _blockspec(initialize_blockspec(
         sizespec,
-        _distspec,
         _blocksize_spec,
         _teamspec)),
     _local_blockspec(initialize_local_blockspec(
@@ -325,7 +323,6 @@ public:
         _teamspec)),
     _blockspec(initialize_blockspec(
         sizespec,
-        _distspec,
         _blocksize_spec,
         _teamspec)),
     _local_blockspec(initialize_local_blockspec(
@@ -1356,8 +1353,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr SizeType local_capacity(
-    team_unit_t unit = UNDEFINED_TEAM_UNIT_ID) const {
+  constexpr SizeType local_capacity() const {
     return local_size();
   }
 
@@ -1510,7 +1506,6 @@ private:
         _teamspec)),
     _blockspec(initialize_blockspec(
         arguments.sizespec(),
-        _distspec,
         _blocksize_spec,
         _teamspec)),
     _local_blockspec(initialize_local_blockspec(
@@ -1572,7 +1567,6 @@ private:
    */
   BlockSpec_t initialize_blockspec(
     const SizeSpec_t         & sizespec,
-    const DistributionSpec_t & distspec,
     const BlockSizeSpec_t    & blocksizespec,
     const TeamSpec_t         & teamspec) const
   {

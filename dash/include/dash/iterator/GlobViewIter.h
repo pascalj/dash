@@ -25,14 +25,6 @@ template<
   class    PointerType,
   class    ReferenceType >
 class GlobIter;
-// Forward-declaration
-template<
-  typename ElementType,
-  class    PatternType,
-  class    GlobMemType,
-  class    PointerType,
-  class    ReferenceType >
-class GlobStencilIter;
 #endif
 
 /**
@@ -126,15 +118,6 @@ public:
   friend std::ostream & operator<<(
       std::ostream & os,
       const GlobViewIter<T_, P_, GM_, Ptr_, Ref_> & it);
-
-  // For conversion to GlobStencilIter
-  template<
-    typename T_,
-    class    P_,
-    class    Ptr_,
-    class    GM_,
-    class    Ref_ >
-  friend class GlobStencilIter;
 
   template<
     typename T_,
@@ -1091,7 +1074,7 @@ std::ostream & operator<<(
           ElementType, Pattern, GlobStaticMem, Pointer, Reference> & it)
 {
   std::ostringstream ss;
-  dash::GlobPtr<ElementType, GlobStaticMem> ptr(it);
+  Pointer ptr(it.globmem(), it.dart_gptr());
   ss << "dash::GlobViewIter<" << typeid(ElementType).name() << ">("
      << "idx:"  << it._idx << ", "
      << "gptr:" << ptr << ")";

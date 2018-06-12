@@ -25,6 +25,22 @@
     throw(excep_type(os.str())); \
   } while(0)
 
+#define DASH_ASSERT_ALWAYS(expr) do { \
+  if (!(expr)) { \
+    DASH_THROW(dash::exception::AssertionFailed, \
+               "Assertion failed: " \
+               << " " << __FILE__ << ":" << __LINE__); \
+  }\
+} while(0)
+
+#define DASH_ASSERT_MSG_ALWAYS(expr, msg) do { \
+  if (!(expr)) { \
+    DASH_THROW(dash::exception::AssertionFailed, \
+               "Assertion failed: " \
+               << " " << __FILE__ << ":" << __LINE__); \
+  }\
+} while(0)
+
 #if defined(DASH_ENABLE_ASSERTIONS)
 
 #define DASH_ASSERT(expr) do { \
@@ -133,6 +149,8 @@
   } \
 } while(0)
 
+#define DASH_ASSERT_NOEXCEPT
+
 #else  // DASH_ENABLE_ASSERTIONS
 
 #define DASH_ASSERT(expr) do { } while (0)
@@ -170,6 +188,8 @@
           dash__unused(val); \
           dash__unused(max); \
         } while (0)
+
+#define DASH_ASSERT_NOEXCEPT noexcept
 
 #endif // DASH_ENABLE_ASSERTIONS
 

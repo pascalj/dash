@@ -9,6 +9,10 @@ namespace dash {
 
 }
 
+#if (__cplusplus < 201103L)
+#error "DASH requires support for C++11 or newer!"
+#endif
+
 /**
  * \defgroup DashConcept Dash C++ Concepts
  * Concepts for C++ components in DASH
@@ -58,6 +62,8 @@ namespace dash {
 #include <dash/Algorithm.h>
 
 #include <dash/Allocator.h>
+
+#include <dash/halo/HaloMatrixWrapper.h>
 
 #include <dash/util/BenchmarkParams.h>
 #include <dash/util/Config.h>

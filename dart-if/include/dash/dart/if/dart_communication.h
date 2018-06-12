@@ -249,6 +249,34 @@ dart_ret_t dart_accumulate(
   dart_datatype_t  dtype,
   dart_operation_t op) DART_NOTHROW;
 
+
+/**
+ * Perform an element-wise atomic update on the values pointed to by \c gptr
+ * by applying the operation \c op with the corresponding value in \c value
+ * on them.
+ *
+ * DART Equivalent to MPI_Accumulate. In contrast to \ref dart_accumulate, this
+ * function blocks until the local buffer can be reused.
+ *
+ * \param gptr    A global pointer determining the target of the accumulate
+ *                operation.
+ * \param values  The local buffer holding the elements to accumulate.
+ * \param nelem   The number of local elements to accumulate per unit.
+ * \param dtype   The data type to use in the accumulate operation \c op.
+ * \param op      The accumulation operation to perform.
+ *
+ * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \threadsafe_data{team}
+ * \ingroup DartCommunication
+ */
+dart_ret_t dart_accumulate_blocking_local(
+  dart_gptr_t      gptr,
+  const void     * values,
+  size_t           nelem,
+  dart_datatype_t  dtype,
+  dart_operation_t op) DART_NOTHROW;
+
 /**
  * Perform an element-wise atomic update on the value of type \c dtype pointed
  * to by \c gptr by applying the operation \c op with \c value on it and
@@ -329,10 +357,13 @@ dart_ret_t dart_compare_and_swap(
  * is guaranteed. A later flush operation is needed to guarantee
  * local and remote completion.
  *
- * \param dest   The local destination buffer to store the data to.
- * \param gptr   A global pointer determining the source of the get operation.
- * \param nelem  The number of elements of type \c dtype to transfer.
- * \param dtype  The data type of the values in buffer \c dest.
+ * \param dest      The local destination buffer to store the data to.
+ * \param gptr      A global pointer determining the source of the get operation.
+ * \param nelem     The number of elements of type \c dtype to transfer.
+ * \param src_type  The data type of the values at the source.
+ * \param dst_type  The data type of the values in buffer \c dest.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -343,7 +374,8 @@ dart_ret_t dart_get(
   void            * dest,
   dart_gptr_t       gptr,
   size_t            nelem,
-  dart_datatype_t   dtype) DART_NOTHROW;
+  dart_datatype_t   src_type,
+  dart_datatype_t   dst_type) DART_NOTHROW;
 
 /**
  * 'REGULAR' variant of dart_put.
@@ -352,10 +384,13 @@ dart_ret_t dart_get(
  * is guaranteed. A later flush operation is needed to guarantee
  * local and remote completion.
  *
- * \param gptr   A global pointer determining the target of the put operation.
- * \param src    The local source buffer to load the data from.
- * \param nelem  The number of elements of type \c dtype to transfer.
- * \param dtype  The data type of the values in buffer \c src.
+ * \param gptr      A global pointer determining the target of the put operation.
+ * \param src       The local source buffer to load the data from.
+ * \param nelem     The number of elements of type \c dtype to transfer.
+ * \param src_type  The data type of the values in buffer \c src.
+ * \param dst_type  The data type of the values at the target.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -366,7 +401,8 @@ dart_ret_t dart_put(
   dart_gptr_t       gptr,
   const void      * src,
   size_t            nelem,
-  dart_datatype_t   dtype) DART_NOTHROW;
+  dart_datatype_t   src_type,
+  dart_datatype_t   dst_type) DART_NOTHROW;
 
 
 /**
@@ -453,17 +489,22 @@ dart_ret_t dart_flush_local_all(
  */
 typedef struct dart_handle_struct * dart_handle_t;
 
+#define DART_HANDLE_NULL (dart_handle_t)NULL
+
 /**
  * 'HANDLE' variant of dart_get.
  * Neither local nor remote completion is guaranteed. A later
  * dart_wait*() call or a fence/flush operation is needed to guarantee
  * completion.
  *
- * \param dest   Local target memory to store the data.
- * \param gptr   Global pointer being the source of the data transfer.
- * \param nelem  The number of elements of \c dtype in buffer \c dest.
- * \param dtype  The data type of the values in buffer \c dest.
+ * \param dest      Local target memory to store the data.
+ * \param gptr      Global pointer being the source of the data transfer.
+ * \param nelem     The number of elements of \c dtype in buffer \c dest.
+ * \param src_type  The data type of the values at the source.
+ * \param dst_type  The data type of the values in buffer \c dest.
  * \param[out] handle Pointer to DART handle to instantiate for later use with \c dart_wait, \c dart_wait_all etc.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -474,7 +515,8 @@ dart_ret_t dart_get_handle(
   void            * dest,
   dart_gptr_t       gptr,
   size_t            nelem,
-  dart_datatype_t   dtype,
+  dart_datatype_t   src_type,
+  dart_datatype_t   dst_type,
   dart_handle_t   * handle) DART_NOTHROW;
 
 /**
@@ -483,11 +525,14 @@ dart_ret_t dart_get_handle(
  * dart_wait*() call or a fence/flush operation is needed to guarantee
  * completion.
  *
- * \param gptr   Global pointer being the target of the data transfer.
- * \param src    Local source memory to transfer data from.
- * \param nelem  The number of elements of type \c dtype to transfer.
- * \param dtype  The data type of the values in buffer \c dest.
+ * \param gptr      Global pointer being the target of the data transfer.
+ * \param src       Local source memory to transfer data from.
+ * \param nelem     The number of elements of type \c dtype to transfer.
+ * \param src_type  The data type of the values in buffer \c src.
+ * \param dst_type  The data type of the values at the target.
  * \param[out] handle Pointer to DART handle to instantiate for later use with \c dart_wait, \c dart_wait_all etc.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -498,7 +543,8 @@ dart_ret_t dart_put_handle(
   dart_gptr_t       gptr,
   const void      * src,
   size_t            nelem,
-  dart_datatype_t   dtype,
+  dart_datatype_t   src_type,
+  dart_datatype_t   dst_type,
   dart_handle_t   * handle) DART_NOTHROW;
 
 /**
@@ -513,9 +559,11 @@ dart_ret_t dart_put_handle(
  */
 
 dart_ret_t dart_wait(
-  dart_handle_t handle) DART_NOTHROW;
+  dart_handle_t * handle) DART_NOTHROW;
 /**
  * Wait for the local and remote completion of operations.
+ * Upon success, the handle is invalidated and may not be used in another
+ * \c dart_wait or \c dart_test operation.
  *
  * \param handles Array of handles of operations to wait for.
  * \param n Number of \c handles to wait for.
@@ -526,11 +574,13 @@ dart_ret_t dart_wait(
  * \ingroup DartCommunication
  */
 dart_ret_t dart_waitall(
-  dart_handle_t * handles,
-  size_t          n) DART_NOTHROW;
+  dart_handle_t handles[],
+  size_t        n) DART_NOTHROW;
 
 /**
  * Wait for the local completion of an operation.
+ * Upon success, the handle is invalidated and may not be used in another
+ * \c dart_wait or \c dart_test operation.
  *
  * \param handle Handle of an operations to wait for.
  *
@@ -540,10 +590,12 @@ dart_ret_t dart_waitall(
  * \ingroup DartCommunication
  */
 dart_ret_t dart_wait_local(
-    dart_handle_t handle);
+  dart_handle_t * handle) DART_NOTHROW;
 
 /**
  * Wait for the local completion of operations.
+ * Upon success, the handles are invalidated and may not be used in another
+ * \c dart_wait or \c dart_test operation.
  *
  * \param handles Array of handles of operations to wait for.
  * \param n Number of \c handles to wait for.
@@ -554,11 +606,13 @@ dart_ret_t dart_wait_local(
  * \ingroup DartCommunication
  */
 dart_ret_t dart_waitall_local(
-    dart_handle_t * handles,
-    size_t          n) DART_NOTHROW;
+  dart_handle_t handles[],
+  size_t        n) DART_NOTHROW;
 
 /**
  * Test for the local completion of an operation.
+ * If the transfer completed, the handle is invalidated and may not be used
+ * in another \c dart_wait or \c dart_test operation.
  *
  * \param handle The handle of an operation to test for completion.
  * \param[out] result \c True if the operation has completed.
@@ -569,11 +623,30 @@ dart_ret_t dart_waitall_local(
  * \ingroup DartCommunication
  */
 dart_ret_t dart_test_local(
-  dart_handle_t   handle,
+  dart_handle_t * handle,
   int32_t       * result) DART_NOTHROW;
 
 /**
+ * Test for the completion of an operation and ensure remote completion.
+ * If the transfer completed, the handle is invalidated and may not be used
+ * in another \c dart_wait or \c dart_test operation.
+ *
+ * \param handle The handle of an operation to test for completion.
+ * \param[out] result \c True if the operation has completed.
+ *
+ * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \threadsafe
+ * \ingroup DartCommunication
+ */
+dart_ret_t dart_test(
+  dart_handle_t * handleptr,
+  int32_t       * is_finished);
+
+/**
  * Test for the local completion of operations.
+ * If the transfers completed, the handles are invalidated and may not be
+ * used in another \c dart_wait or \c dart_test operation.
  *
  * \param handles Array of handles of operations to test for completion.
  * \param n Number of \c handles to test for completion.
@@ -585,9 +658,39 @@ dart_ret_t dart_test_local(
  * \ingroup DartCommunication
  */
 dart_ret_t dart_testall_local(
-  dart_handle_t * handles,
+  dart_handle_t   handles[],
   size_t          n,
   int32_t       * result) DART_NOTHROW;
+
+/**
+ * Test for the completion of operations and ensure remote completion.
+ * If the transfers completed, the handles are invalidated and may not be
+ * used in another \c dart_wait or \c dart_test operation.
+ *
+ * \param handles Array of handles of operations to test for completion.
+ * \param n Number of \c handles to test for completion.
+ * \param[out] result \c True if all operations have completed.
+ *
+ * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \threadsafe
+ * \ingroup DartCommunication
+ */
+dart_ret_t dart_testall(
+  dart_handle_t   handles[],
+  size_t          n,
+  int32_t       * is_finished);
+
+/**
+ * Free the handle without testing or waiting for completion of the operation.
+ *
+ * \param handle Pointer to the handle to free.
+ *
+ * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ */
+dart_ret_t dart_handle_free(
+  dart_handle_t * handle) DART_NOTHROW;
 
 /** \} */
 
@@ -602,10 +705,13 @@ dart_ret_t dart_testall_local(
  * 'BLOCKING' variant of dart_get.
  * Both local and remote completion is guaranteed.
  *
- * \param dest   Local target memory to store the data.
- * \param gptr   Global pointer being the source of the data transfer.
- * \param nelem  The number of elements of type \c dtype to transfer.
- * \param dtype  The data type of the values in buffer \c dest.
+ * \param dest      Local target memory to store the data.
+ * \param gptr      Global pointer being the source of the data transfer.
+ * \param nelem     The number of elements of type \c dtype to transfer.
+ * \param src_type  The data type of the values at the source.
+ * \param dst_type  The data type of the values in buffer \c dest.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -616,16 +722,20 @@ dart_ret_t dart_get_blocking(
   void         *  dest,
   dart_gptr_t     gptr,
   size_t          nelem,
-  dart_datatype_t dtype) DART_NOTHROW;
+  dart_datatype_t src_type,
+  dart_datatype_t dst_type) DART_NOTHROW;
 
 /**
  * 'BLOCKING' variant of dart_put.
  * Both local and remote completion is guaranteed.
  *
- * \param gptr   Global pointer being the target of the data transfer.
- * \param src    Local source memory to transfer data from.
- * \param nelem  The number of elements of type \c dtype to transfer.
- * \param dtype  The data type of the values in buffer \c dest.
+ * \param gptr      Global pointer being the target of the data transfer.
+ * \param src       Local source memory to transfer data from.
+ * \param nelem     The number of elements of type \c dtype to transfer.
+ * \param src_type  The data type of the values in buffer \c src.
+ * \param dst_type  The data type of the values at the target.
+ *
+ * \note Base-type conversion is not performed.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.
  *
@@ -636,7 +746,8 @@ dart_ret_t dart_put_blocking(
   dart_gptr_t       gptr,
   const void      * src,
   size_t            nelem,
-  dart_datatype_t   dtype) DART_NOTHROW;
+  dart_datatype_t   src_type,
+  dart_datatype_t   dst_type) DART_NOTHROW;
 
 /** \} */
 
@@ -667,8 +778,8 @@ dart_ret_t dart_send(
   const void         * sendbuf,
   size_t               nelem,
   dart_datatype_t      dtype,
-	int                  tag,
-	dart_global_unit_t   unit) DART_NOTHROW;
+  int                  tag,
+  dart_global_unit_t   unit) DART_NOTHROW;
 
 /**
  * DART Equivalent to MPI recv.
@@ -688,24 +799,24 @@ dart_ret_t dart_recv(
   void               * recvbuf,
   size_t               nelem,
   dart_datatype_t      dtype,
-	int                  tag,
-	dart_global_unit_t   unit) DART_NOTHROW;
+  int                  tag,
+  dart_global_unit_t   unit) DART_NOTHROW;
 
 /**
  * DART Equivalent to MPI sendrecv.
  *
- * \param sendbuf      Buffer containing the data to be sent by the 
+ * \param sendbuf      Buffer containing the data to be sent by the
  *                     source unit.
  * \param send_nelem   Number of values sentby the source unit.
  * \param send_dtype   The data type of values in \c sendbuf.
  * \param dest         Unitthe message is sent to.
- * \param send_tag     Message tag for the distinction between different 
+ * \param send_tag     Message tag for the distinction between different
  *                     messages of the source unit.
  * \param recvbuf      Buffer for the incoming data.
  * \param recv_nelem   Number of values received by the destination unit.
  * \param recv_dtype   The data type of values in \c recvbuf.
  * \param src          Unit sending the message.
- * \param recv_tag     Message tag for the distinction between different 
+ * \param recv_tag     Message tag for the distinction between different
  *                     messages of the destination unit.
  *
  * \return \c DART_OK on success, any other of \ref dart_ret_t otherwise.

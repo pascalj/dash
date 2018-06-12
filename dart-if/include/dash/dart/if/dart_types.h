@@ -96,44 +96,34 @@ typedef enum
  *
  * \ingroup DartTypes
  */
-typedef enum
-{
-    DART_TYPE_UNDEFINED = 0,
-    /// integral data types 
-    DART_TYPE_BYTE,
-    DART_TYPE_SHORT,
-    DART_TYPE_INT,
-    DART_TYPE_UINT,
-    DART_TYPE_LONG,
-    DART_TYPE_ULONG,
-    DART_TYPE_LONGLONG,
-    /// floating point data types
-    DART_TYPE_FLOAT,
-    DART_TYPE_DOUBLE,
-    /// Reserved, do not use!
-    DART_TYPE_COUNT
-} dart_datatype_t;
+typedef intptr_t dart_datatype_t;
+
+#define DART_TYPE_UNDEFINED    (dart_datatype_t)(0)
+/// integral data types
+#define DART_TYPE_BYTE         (dart_datatype_t)(1)
+#define DART_TYPE_SHORT        (dart_datatype_t)(2)
+#define DART_TYPE_INT          (dart_datatype_t)(3)
+#define DART_TYPE_UINT         (dart_datatype_t)(4)
+#define DART_TYPE_LONG         (dart_datatype_t)(5)
+#define DART_TYPE_ULONG        (dart_datatype_t)(6)
+#define DART_TYPE_LONGLONG     (dart_datatype_t)(7)
+#define DART_TYPE_ULONGLONG    (dart_datatype_t)(8)
+/// floating point data types
+#define DART_TYPE_FLOAT        (dart_datatype_t)(9)
+#define DART_TYPE_DOUBLE       (dart_datatype_t)(10)
+#define DART_TYPE_LONG_DOUBLE  (dart_datatype_t)(11)
+/// Reserved, do not use!
+#define DART_TYPE_LAST         (dart_datatype_t)(12)
+
 
 /** size for integral \c size_t */
 #if (UINT32_MAX == SIZE_MAX)
-#  define DART_TYPE_SIZET DART_TYPE_UINT
+#  define DART_TYPE_SIZET DART_TYPE_ULONG
 #elif (UINT64_MAX == SIZE_MAX)
-#  define DART_TYPE_SIZET DART_TYPE_LONGLONG
+#  define DART_TYPE_SIZET DART_TYPE_ULONGLONG
 #else
 #  error "Cannot determine DART type for size_t!"
 #endif
-
-
-/** \cond DART_HIDDEN_SYMBOLS */
-/**
- * \todo This is not part of the DART interface
- * and should move to dash::internal eventually.
- */
-typedef struct {
-    dart_datatype_t dtype;
-    int             nelem;
-} dart_storage_t;
-/** \endcond */
 
 /**
  * Data type for storing a unit ID
@@ -248,11 +238,11 @@ typedef int16_t dart_team_t;
 
 /**
  * Levels of thread-support offered by DART.
- * \ref DART_THREAD_MULTIPLE is supported if 
+ * \ref DART_THREAD_MULTIPLE is supported if
  * DART has been build with \c DART_ENABLE_THREADSUPPORT
- * and the underlying communication backend supports 
+ * and the underlying communication backend supports
  * thread-safe access.
- * 
+ *
  */
 typedef enum
 {
@@ -671,6 +661,69 @@ typedef struct
   int log_enabled;
 }
 dart_config_t;
+
+/**
+ * Create a strided data type using blocks of size \c blocklen and a stride
+ * of \c stride. The number of elements copied using the resulting datatype
+ * has to be a multiple of \c blocklen.
+ *
+ * \param      basetype   The type of elements in the blocks.
+ * \param      stride     The stride between blocks.
+ * \param      blocklen   The number of elements of type \c basetype in each block.
+ * \param[out] newtype    The newly created data type.
+ *
+ * \return \ref DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \ingroup DartTypes
+ */
+dart_ret_t
+dart_type_create_strided(
+  dart_datatype_t   basetype,
+  size_t            stride,
+  size_t            blocklen,
+  dart_datatype_t * newtype);
+
+
+/**
+ * Create an indexed data type using \c count blocks of size \c blocklen[i]
+ * with offsets \c offset[i] for each <tt>0 <= i < count</tt>. The number of
+ * elements copied using the resulting datatype has to be a multiple of
+ * Sum(\c blocklen[0:i]).
+ *
+ * \param      basetype The type of elements in the blocks.
+ * \param      count    The number of blocks.
+ * \param      blocklen The number of elements of type \c basetype in block[i].
+ * \param      offset   The offset of block[i].
+ * \param[out] newtype  The newly created data type.
+ *
+ * \return \ref DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \ingroup DartTypes
+ */
+dart_ret_t
+dart_type_create_indexed(
+  dart_datatype_t   basetype,
+  size_t            count,
+  const size_t      blocklen[],
+  const size_t      offset[],
+  dart_datatype_t * newtype);
+
+/**
+ * Destroy a data type that was previously created using
+ * \ref dart_type_create_strided or \ref dart_type_create_indexed.
+ *
+ * Data types can be destroyed before pending operations using that type have
+ * completed. However, after destruction a type may not be used to start
+ * new operations.
+ *
+ * \param      dart_type The type to be destroyed.
+ *
+ * \return \ref DART_OK on success, any other of \ref dart_ret_t otherwise.
+ *
+ * \ingroup DartTypes
+ */
+dart_ret_t
+dart_type_destroy(dart_datatype_t *dart_type);
 
 /** \cond DART_HIDDEN_SYMBOLS */
 #define DART_INTERFACE_OFF
