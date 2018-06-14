@@ -9,10 +9,16 @@ namespace dash {
 /**
  * Execution policy type trait.
  */
-template<class T>
-struct is_execution_policy
-: public std::integral_constant<bool, false>
-{ };
+template <class T>
+struct is_execution_policy : public std::integral_constant<bool, false> {
+};
+
+/**
+ * Does policy T have an executor associated?
+ */
+template <class T>
+struct has_executor : public std::integral_constant<bool, false> {
+};
 
 namespace execution {
 

@@ -729,7 +729,7 @@ ValueType * copy(
 template <
   typename ValueType,
   class GlobOutputIt >
-constexpr dash::Future<GlobOutputIt> copy_async(
+dash::Future<GlobOutputIt> copy_async(
   ValueType    * in_first,
   ValueType    * in_last,
   GlobOutputIt   out_first)
