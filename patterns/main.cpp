@@ -1,8 +1,7 @@
 #include "PatternTree.h"
+#include "Visualize.h"
 #include <iostream>
 
-
-template <typename T> std::string type_name();
 
 template<typename T>
 void name() {
@@ -10,9 +9,8 @@ void name() {
 }
 
 int main() {
-  name<level1>();
-  name<get_node<level1>::at<0, 0>::type>();
-  name<get_node<level1>::at<0, 1>::type>();
-  name<level2>();
-  name<get_node<level2>::at<2, 1>::type>();
+  std::cout << "graph tree {" << std::endl;
+  level2 node;
+  visualize(node);
+  std::cout << "}" << std::endl;
 }
