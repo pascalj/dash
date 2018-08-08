@@ -96,7 +96,4 @@ struct get_node<PatternNode<ConfigurationT, Left, Right>> {
 };
 
 
-using root   = split<PatternLeaf<Configuration<void, RootProjection>>>::type;
-using level1 = split_right<split_left<root>::type>::type;
-using level2 = replace_right<level1>::with<level1>::type;
 #endif
