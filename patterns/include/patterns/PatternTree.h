@@ -78,6 +78,15 @@ struct replace_config_t<PatternNode<ConfigurationT, Left, Right>> {
   };
 };
 
+
+template <typename Node>
+struct get_config_t;
+
+template <typename ConfigurationT, typename Left, typename Right>
+struct get_config_t<PatternNode<ConfigurationT, Left, Right>> {
+  typedef ConfigurationT type;
+};
+
 template <typename Node>
 struct get_node;
 
@@ -93,6 +102,56 @@ struct get_node<PatternNode<ConfigurationT, Left, Right>> {
   struct at<0, Offset> {
     typedef typename std::conditional<Offset == 0, Left, Right>::type type;
   };
+};
+
+
+template<typename T>
+struct true_pred : std::true_type { };
+
+template <typename Node, typename P = true_pred<Node>>
+struct number_of_nodes;
+
+template <
+    typename ConfigurationT,
+    typename Left,
+    typename Right,
+    template <class Node> class P>
+struct number_of_nodes<
+    PatternNode<ConfigurationT, Left, Right>,
+    P<PatternNode<ConfigurationT, Left, Right>>> {
+  using NodeT = PatternNode<ConfigurationT, Left, Right>;
+  static constexpr int leftCount  = number_of_nodes<Left, P<Left>>::value;
+  static constexpr int rightCount = number_of_nodes<Right, P<Right>>::value;
+  static constexpr int nodeCound =
+      P<NodeT>::value ? 1 : 0;
+  static const int value = nodeCound + leftCount + rightCount;
+};
+
+template <typename ConfigurationT, typename Left, template <class> class P>
+struct number_of_nodes<
+    PatternNode<ConfigurationT, Left, void>,
+    P<PatternNode<ConfigurationT, Left, void>>> {
+
+  using NodeT = PatternNode<ConfigurationT, Left, void>;
+  static constexpr int value =
+      P<NodeT>::value ? 1 : 0;
+};
+
+template <typename ConfigurationT, typename Right, template <class> class P>
+struct number_of_nodes<
+    PatternNode<ConfigurationT, void, Right>,
+    P<PatternNode<ConfigurationT, void, Right>>> {
+  using NodeT = PatternNode<ConfigurationT, void, Right>;
+  static constexpr int value =
+      P<NodeT>::value ? 1 : 0;
+};
+
+template <typename ConfigurationT,
+    template <class> class P>
+struct number_of_nodes<PatternNode<ConfigurationT, void, void>, P<PatternNode<ConfigurationT, void, void>>> {
+  using NodeT = PatternNode<ConfigurationT, void, void>;
+  static constexpr int value =
+      P<NodeT>::value ? 1 : 0;
 };
 
 
