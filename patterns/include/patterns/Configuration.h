@@ -9,6 +9,7 @@ class PatternNode;
 
 template <typename Entity, typename Projection = RootProjection>
 struct Configuration {
+  size_t total;
 };
 
 template <typename Node>
@@ -38,7 +39,9 @@ struct set_entity_t<Configuration<Entity, Projection>> {
 
 
 template<typename Config>
-struct get_entity_t;
+struct get_entity_t {
+  typedef void type;
+};
 
 
 template<typename Entity, typename Projection>
@@ -62,6 +65,27 @@ struct set_projection<PatternNode<ConfigurationT, Left, Right>> {
         Right>
         type;
   };
+};
+
+template<typename Config>
+struct get_projection {
+  typedef void type;
+};
+
+
+template<typename Entity, typename Projection>
+struct get_projection<Configuration<Entity, Projection>> {
+  typedef Projection type;
+};
+
+template<typename Node>
+struct get_config {
+  typedef void type;
+};
+
+template<typename Configuration, typename Left, typename Right>
+struct get_config<PatternNode<Configuration, Left, Right>> {
+  typedef Configuration type;
 };
 
 template<typename ConfigurationT, typename Left, typename Right>

@@ -12,11 +12,11 @@ void name() {
 
 using CPULeaf = PatternLeaf<Configuration<Process>>;
 using GPULeaf = PatternLeaf<Configuration<Process>>;
-using root   = split<PatternLeaf<Configuration<None, RootProjection>>>::type;
-using level1 = split_right<split_left<root>::type>::type;
-using level2 = replace_right<level1>::with<level1>::type;
-using level3 = replace_left<level1>::with<CPULeaf>::type;
-using Node = level3;
+using root    = split<PatternLeaf<Configuration<None, RootProjection>>>::type;
+using level1  = split_right<split_left<root>::type>::type;
+using level2  = replace_right<level1>::with<level1>::type;
+using level3  = replace_left<level1>::with<CPULeaf>::type;
+using Node    = level3;
 
 int main() {
   std::cout << "graph tree {" << std::endl;
