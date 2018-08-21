@@ -1,10 +1,15 @@
 
-CXXFLAGS=-I./include -std=c++14
+CXXFLAGS=-I./include -std=c++14 -DUSE_MPI -g
 
-includes = $(wildcard include/*.h)
+includes = $(wildcard include/patterns/*.h)
+
+all: graph examples
 
 graph: graph.cpp ${includes}
 	$(CXX) $(CXXFLAGS) -o graph graph.cpp
 
+examples: examples.cpp ${includes}
+	$(CXX) $(CXXFLAGS) -o examples examples.cpp
+
 clean:
-	rm -f graph
+	rm -f graph examples

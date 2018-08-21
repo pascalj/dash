@@ -2,6 +2,13 @@
 #define PATTERNS__ENTITY_H
 
 
+#include <iostream>
+
+#ifdef USE_MPI
+#include "mpi.h"
+#endif
+
+
 /**
  * An EntityClass is used to describe what kind of computational unit
  * may be assigned to a given node in the pattern tree.
@@ -28,10 +35,18 @@ struct Entity {
 struct GPU : Entity<GPU> {
 };
 struct Process : Entity<Process> {
+#ifdef MPI_VERSION
+  Process() {
+    index = 1;
+    total = 4;
+    /* MPI_Comm_rank(MPI_COMM_WORLD, &index); */
+    /* MPI_Comm_size(MPI_COMM_WORLD, &total); */
+  }
+#endif
 };
 struct None : Entity<None> {
   int index = 0;
-  int total = 0;
+  int total = 1;
 };
 
 
