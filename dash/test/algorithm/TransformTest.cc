@@ -7,6 +7,8 @@
 #include <dash/Array.h>
 #include <dash/Matrix.h>
 
+#include <experimental/execution>
+
 #include <array>
 
 
@@ -220,4 +222,68 @@ TEST_F(TransformTest, MatrixGlobalPlusGlobalBlocking)
   std::array<index_t, 2> first_l_block_a_offsets = first_l_block_a.offsets();
   EXPECT_EQ_U(first_l_block_a_begin,
               first_l_block_a_offsets);
+}
+
+struct simple_executor {
+  template <
+      class Function,
+      class Shape,
+      class ResultFactory,
+      class SharedFactory>
+  void bulk_twoway_execute(
+      Function f, Shape pattern, ResultFactory result, SharedFactory)
+  {
+    auto local_size = pattern.local_size();
+    for (int i = 0; i < local_size; i++) {
+      f(i, result(), nullptr);
+    }
+  }
+};
+struct policy {
+  simple_executor executor()
+  {
+    return simple_executor();
+  }
+};
+
+namespace dash {
+template <>
+struct is_execution_policy<policy>
+  : public std::integral_constant<bool, true> {
+};
+}
+TEST_F(TransformTest, SimpleExecutorUnary)
+{
+  // Local input and output ranges, does not require communication.
+  // Simple case: array_in's and array_out's elements map to the
+  // same units.
+  const size_t num_elem_local = 5;
+  size_t num_elem_total       = dash::size() * num_elem_local;
+  // Identical distribution in all ranges:
+  dash::Array<int> array_in(num_elem_total, dash::BLOCKED);
+  dash::Array<int> array_dest(num_elem_total, dash::BLOCKED);
+
+  // Fill ranges with initial values:
+  for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
+    array_in.local[l_idx]   = l_idx;
+    array_dest.local[l_idx] = 45;
+  }
+
+  dash::barrier();
+
+  // Identical start offsets in all ranges (begin() = 0):
+  dash::transform(
+      policy(),
+      array_in.begin(),
+      array_in.end(),
+      array_dest.begin(),
+      [](int elem) { return elem + 23; });
+
+  dash::barrier();
+
+  for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
+    EXPECT_EQ_U(array_in.local[l_idx], l_idx);
+    EXPECT_EQ_U(array_dest.local[l_idx], l_idx + 23);
+  }
+
 }

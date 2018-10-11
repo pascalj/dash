@@ -14,6 +14,8 @@
 #include <dash/util/Trace.h>
 
 #include <dash/dart/if/dart_communication.h>
+#include <experimental/execution>
+#include <dash/Execution.h>
 
 #ifdef DASH_ENABLE_OPENMP
 #include <omp.h>
@@ -435,7 +437,91 @@ GlobOutputIt transform(
   return out_first + num_local_elements;
 }
 
+/**
+ * Implementation for execution policies with a unary operation.
+ *
+ * This implementation assumes nothing about the allocation of first and
+ * out_first, but uses optimizationsoptimizes when first == out_first.
+ *
+ * When the policy provides an executor, the bulk_twoway_execute function
+ * is called with global *iterators* as input. The executor has to handle
+ * DASH's iterators.
+ *
+ */
+template <
+    class ExecutionPolicy,
+    class GlobInputIt,
+    class GlobOutputIt,
+    class UnaryOp>
+GlobOutputIt transform(
+    // The execution policy to use
+    ExecutionPolicy&& policy,
+    /// Iterator on begin of first local range
+    GlobInputIt first,
+    /// Iterator after last element of local range
+    GlobInputIt last,
+    /// Iterator on first element of global output range
+    GlobOutputIt out_first,
+    /// Reduce operation
+    UnaryOp unary_op)
+{
+  DASH_LOG_DEBUG("dash::transform(af, al, bf, outf, binop)");
+  // Outut range different from rhs input range is not supported yet
+
+  using value_type = typename dash::iterator_traits<GlobInputIt>::value_type;
+  std::vector<value_type> result(std::distance(first, last));
+  if (first  != out_first) {
+    // Output range is rhs input range: C += A
+    // Input is (in_a_first, in_a_last).
+  } else {
+    using result_t = typename dash::executor_result<decltype(policy.executor())>::type;
+    policy.executor().bulk_twoway_execute(
+        [&](size_t idx, executor_result_t<decltype(policy.executor())>::type &res_vec, void*) {
+          res_vec[idx] = unary_op(first[idx]);
+        },
+        first.pattern(),           // "shape"
+        [&]() -> std::vector<value_type>& { return result; },  // result factory, handed to f
+        [=] { return nullptr; });  // shared state, unused here
+    /* first = in_range.data(); */
+    /* last = first + in_range.size(); */
+  }
+
+  for (int i = 0; i < std::distance(first,last); i++) {
+    out_first[i] = result[i];
+  };
+
+  dash::util::Trace trace("transform");
+
+  // Resolve local range from global range:
+  // Number of elements in local range:
+  /* size_t num_local_elements     = std::distance(first, last); */
+  /* // Global iterator to dart_gptr_t: */
+  /* dart_gptr_t dest_gptr         = out_first.dart_gptr(); */
+  /* // Send accumulate message: */
+  /* trace.enter_state("transform_blocking"); */
+  /* /1* dash::internal::transform_blocking_impl( *1/ */
+  /* /1* dest_gptr, first, num_local_elements, unary_op.dart_operation()); *1/ */
+
+  /* trace.exit_state("transform_blocking"); */
+  /* // The position past the last element transformed in global element space */
+  /* // cannot be resolved from the size of the local range if the local range */
+  /* // spans over more than one block. Otherwise, the difference of two global */
+  /* // iterators is not well-defined. The corresponding invariant is: */
+  /* //   g_out_last == g_out_first + (l_in_last - l_in_first) */
+  /* // Example: */
+  /* //   unit:            0       1       0 */
+  /* //   local offset:  | 0 1 2 | 0 1 2 | 3 4 5 | ... */
+  /* //   global offset: | 0 1 2   3 4 5   6 7 8   ... */
+  /* //   range:          [- - -           - -] */
+  /* // When iterating in local memory range [0,5[ of unit 0, the position of the */
+  /* // global iterator to return is 8 != 5 */
+  /* // For ranges over block borders, we would have to resolve the global */
+  /* // position past the last element transformed from the iterator's pattern */
+  /* // (see dash::PatternIterator). */
+  return out_first + 1;
+}
 } // namespace internal
+
 
 template <
     class InputIt,
@@ -476,6 +562,30 @@ GlobOutputIt transform(
           InputIt_is_global_t::value,
           internal::transform_impl_glob_input_it,
           internal::transform_impl_local_input_it>::type());
+}
+
+template <
+    class ExecutionPolicy,
+    class InputIt,
+    class GlobOutputIt,
+    class UnaryOperation>
+typename std::
+    enable_if<is_execution_policy<ExecutionPolicy>::value, GlobOutputIt>::type
+    transform(
+        ExecutionPolicy&& policy,
+        InputIt           in_a_first,
+        InputIt           in_a_last,
+        GlobOutputIt      out_first,
+        UnaryOperation    unary_op)
+{
+  using InputIt_traits_t    = dash::iterator_traits<InputIt>;
+
+  return internal::transform(
+      policy,
+      in_a_first,
+      in_a_last,
+      out_first,
+      unary_op);
 }
 
 /**
