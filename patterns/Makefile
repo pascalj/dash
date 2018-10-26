@@ -1,5 +1,4 @@
-
-CXXFLAGS=-I./include -std=c++14 -DUSE_MPI -g
+CXXFLAGS=-I./include -std=c++14 -g
 
 includes = $(wildcard include/patterns/*.h)
 

@@ -7,10 +7,25 @@
 #include "ElementMapping.h"
 #include <type_traits>
 
-template <typename Node>
-struct is_process {
-  static constexpr bool value =
-      std::is_same<Process, typename get_entity_t<Node>::type>::value;
+template <typename EntityType>
+struct with_entity_type {
+  template <typename Node>
+  struct type {
+    static const bool value =
+        std::is_same<EntityType, typename get_entity_t<Node>::type>::value;
+    };
+};
+
+template<class Node>
+using is_process = with_entity_type<Process>::type<Node>;
+
+template <typename EntityType, typename Tree>
+struct nodes_with_entity_type {
+  using entities = with_entity_type<EntityType>;
+  using nodes   = typename find_node<
+      entities::template type>::template in_tree<Tree>::type;
+  using node_count       = location_size<nodes>;
+  const static int count = node_count::value;
 };
 
 /**
@@ -30,22 +45,22 @@ public:
    */
   const RuntimeLocation map(const Process &p)
   {
-    using Nodes = typename find_node<is_process>::in_tree<PatternTree, 0, 0>::type;
-    using MatchingNodes = location_size<Nodes>;
+    using MatchingNodes = nodes_with_entity_type<Process, PatternTree>;
+    using Nodes = typename MatchingNodes::nodes;
 
-    static_assert(MatchingNodes::value > 0, "No matching nodes in the pattern tree");
+    static_assert(MatchingNodes::count > 0, "No matching nodes in the pattern tree");
 
     auto level = levels<Nodes>::value;
     auto offset = offsets<Nodes>::value;
-    auto idx = p.index % MatchingNodes::value;
+    auto idx = p.index % MatchingNodes::count;
     return RuntimeLocation{level[idx], offset[idx]};
   }
 
-  static const int entities_on_node(const Process &p) {
-    using Nodes = typename find_node<is_process>::in_tree<PatternTree, 0, 0>::type;
-    using MatchingNodes = location_size<Nodes>;
+  template<typename EntityType>
+  static const int entities_on_node(const EntityType &p) {
+    using MatchingNodes = nodes_with_entity_type<EntityType, PatternTree>;
 
-    static_assert(MatchingNodes::value > 0, "No matching nodes in the pattern tree");
+    static_assert(MatchingNodes::count > 0, "No matching nodes in the pattern tree");
 
     // TODO: edge cases
     return p.total / MatchingNodes::value;
@@ -57,16 +72,16 @@ class LinearEntityMapping {
   using tree_t = PatternTree;
 
 public:
-  /**
+  /** 
    * Map a process to a node. It returns a NodeAddr that can be used to
-   * address the node in a tree.
-   */
-  const RuntimeLocation map(const Process &p)
+   * address the node in a tree.*/
+  template<typename EntityType>
+  const RuntimeLocation map(const EntityType &p)
   {
-    using Nodes = typename find_node<is_process>::in_tree<PatternTree, 0, 0>::type;
-    using MatchingNodes = location_size<Nodes>;
+    using MatchingNodes = nodes_with_entity_type<EntityType, PatternTree>;
+    using Nodes = typename MatchingNodes::nodes;
 
-    static_assert(MatchingNodes::value > 0, "No matching nodes in the pattern tree");
+    static_assert(MatchingNodes::count > 0, "No matching nodes in the pattern tree");
 
     auto level = levels<Nodes>::value;
     auto offset = offsets<Nodes>::value;
@@ -75,22 +90,23 @@ public:
     return RuntimeLocation{level[idx], offset[idx]};
   }
 
-  static const int entities_on_node(const Process &p) {
-    using Nodes = typename find_node<is_process>::in_tree<PatternTree, 0, 0>::type;
-    using MatchingNodes = location_size<Nodes>;
-
-    static_assert(MatchingNodes::value > 0, "No matching nodes in the pattern tree");
-    auto per_node = p.total / MatchingNodes::value + (p.total % MatchingNodes::value > 0 ? 1 : 0);
+  template<class EntityType>
+  static const int entities_on_node(const EntityType &p) {
+    using MatchingNodes = nodes_with_entity_type<EntityType, PatternTree>;
+    using Nodes = typename MatchingNodes::nodes;
+    /* static_assert(entity_nodes::count > 0, "No matching nodes in the pattern tree"); */
+    auto per_node = p.total / MatchingNodes::count + (p.total % MatchingNodes::count > 0 ? 1 : 0);
     // TODO: edge cases
     return per_node;
   };
 
-  static const int position_on_node(const Process &p) {
-    using Nodes = typename find_node<is_process>::in_tree<PatternTree, 0, 0>::type;
-    using MatchingNodes = location_size<Nodes>;
+  template<class EntityType>
+  static const int position_on_node(const EntityType &p) {
+    using MatchingNodes = nodes_with_entity_type<EntityType, PatternTree>;
+    using Nodes = typename MatchingNodes::nodes;
 
-    static_assert(MatchingNodes::value > 0, "No matching nodes in the pattern tree");
-    auto per_node = p.total / MatchingNodes::value + (p.total % MatchingNodes::value > 0 ? 1 : 0);
+    static_assert(MatchingNodes::count > 0, "No matching nodes in the pattern tree");
+    auto per_node = p.total / MatchingNodes::count + (p.total % MatchingNodes::count > 0 ? 1 : 0);
     auto offset = p.index % per_node;
     // TODO: edge cases
     return offset;

@@ -25,6 +25,7 @@ int main() {
   std::cout << "BlockPattern<int>" << std::endl;
   std::cout << "\tProcessMap: ";
   name<typename find_node<is_process>::in_tree<Pattern::tree_t, 0, 0>::type>();
+  name<typename nodes_with_entity_type<Process, Pattern::tree_t>::nodes>();
   std::cout << "\tbegin(" << proc.index << "): " << p.lbegin(proc) << ", end: " << p.lend(proc) << std::endl;
 #ifdef MPI_VERSION
   MPI_Finalize();
