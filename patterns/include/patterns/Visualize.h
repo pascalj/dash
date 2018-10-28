@@ -1,7 +1,6 @@
 #include <string>
 #include <cstdio>
 
-#include "Configuration.h"
 #include "Entity.h"
 
 template <typename Config, typename Left, typename Right>

@@ -18,10 +18,9 @@
  * A concrete instance of an EntityClass is an Entity, e.g. one specific
  * process or GPU.
  */
-template<typename Entity>
-struct EntityClass {
-};
 
+
+struct EmptyEntity {};
 
 template<typename EntityType>
 struct Entity {
@@ -70,11 +69,5 @@ struct entity_name<Process> {
   static constexpr const char* value = "Process";
 };
 
-
-
-
-
-using GPUEntityClass = EntityClass<GPU>;
-using ProcessEntityClass = EntityClass<Process>;
 
 #endif

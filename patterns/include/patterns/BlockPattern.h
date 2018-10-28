@@ -1,15 +1,14 @@
 #ifndef PATTERNS__BLOCK_PATTERN_H
 #define PATTERNS__BLOCK_PATTERN_H
 
-#include "Configuration.h"
-#include "PatternTree.h"
 #include "Entity.h"
-#include "EntityMapping.h"
-
+#include "Node.h"
+#include "PatternTree.h"
+#include <array>
 
 using index_t = size_t;
 // coord_t is currently only one-dimensional
-using coord_t = size_t;
+using coord_t = std::array<size_t, 3>;
 
 struct ViewSpec {
   coord_t offset;
@@ -19,26 +18,20 @@ struct ViewSpec {
 template<typename ValueType, typename DefaultEntity = Process>
 class BlockPattern {
 private:
-  using ConfigurationT = Configuration<DefaultEntity>;
-  using PatternTree = PatternNode<void, PatternLeaf<ConfigurationT>, PatternLeaf<ConfigurationT>>;
-  using EntityMapping = LinearEntityMapping<PatternTree>;
-  using ElementMapping = BalancedElementMapping<PatternTree, EntityMapping>;
+  using Tree =
+      BalancedNode<EmptyEntity, LeafNode<DefaultEntity>, LeafNode<DefaultEntity>>;
 
 public:
-  BlockPattern(size_t capacity) : _capacity(capacity) {}
+  BlockPattern(size_t capacity) : _capacity(capacity), tree(_capacity, 0) {}
 
   template<typename Entity = DefaultEntity>
   index_t lbegin(const Entity &entity = Entity::current()) {
-    auto location = entity_mapping.map(entity);
-    return ElementMapping::offset(entity, location, _capacity);
+    return tree.begin(entity);
   }
 
   template<typename Entity = DefaultEntity>
   index_t lend(const Entity &entity = Entity::current()) {
-    auto location = entity_mapping.map(entity);
-    auto offset = ElementMapping::offset(entity, location, _capacity);
-    auto size = ElementMapping::count(entity, location, _capacity);
-    return offset + size;
+    return tree.begin(entity) + tree.offset(entity);
   };
 
   /**
@@ -52,14 +45,14 @@ public:
    * Maps a global coord to a global linear index
    */
   index_t global_at(coord_t global_coord) {
-    return global_coord;
+    /* return global_coord; */
   }
 
   /**
    * Maps a global coordinate to its default entity
    */
   DefaultEntity unit_at(coord_t global_coord) {
-    
+    /* return ElementMapping::unit<DefaultEntity>(global_coord); */
   }
 
   // global to local
@@ -93,28 +86,28 @@ public:
   /**
    * Maps the global linear inde to a block
    */
-  ViewSpec block(index_t global_index); 
+  ViewSpec block(index_t global_index);
 
   /**
    * Maps the local linear index to a block
    */
-  ViewSpec local_block(index_t local_index); 
+  ViewSpec local_block(index_t local_index);
 
   /**
    * Maps the local linear index to a local viewspec/offset
    */
-  ViewSpec local_block_local(index_t local_index); 
+  ViewSpec local_block_local(index_t local_index);
 
   /**
    * Test whether the global index is local to the current unit
    */
   bool is_local(index_t global_index);
-  
+
   /**
    * Test whether the local index is local to the current unit
    */
   /* bool is_local(dim_t dim, index_t local_index, EntityType); */
-  
+
   size_t capacity();
   size_t local_capacity(DefaultEntity);
   size_t size();
@@ -131,12 +124,10 @@ public:
 private:
   // capacity of total elements
   size_t _capacity;
-  PatternTree tree;
-  EntityMapping entity_mapping;
-  ElementMapping element_mapping;
+  Tree tree;
 
 public:
-  using tree_t = PatternTree;
+  using tree_t = Tree;
 };
 
 #endif
