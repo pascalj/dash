@@ -1,4 +1,4 @@
-CXXFLAGS=-I./include -std=c++14 -g
+CXXFLAGS=-I./include -std=c++14 -g -Wall
 
 includes = $(wildcard include/patterns/*.h)
 

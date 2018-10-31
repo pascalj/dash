@@ -15,23 +15,26 @@ struct ViewSpec {
   size_t extent;
 };
 
-template<typename ValueType, typename DefaultEntity = Process>
+template <
+    typename DefaultEntity = Process,
+    typename Tree          = BalancedNode<
+        EmptyEntity,
+        LeafNode<DefaultEntity>,
+        LeafNode<DefaultEntity>>>
 class BlockPattern {
 private:
-  using Tree =
-      BalancedNode<EmptyEntity, LeafNode<DefaultEntity>, LeafNode<DefaultEntity>>;
 
 public:
   BlockPattern(size_t capacity) : _capacity(capacity), tree(_capacity, 0) {}
 
   template<typename Entity = DefaultEntity>
-  index_t lbegin(const Entity &entity = Entity::current()) {
+  constexpr index_t lbegin(const Entity &entity = Entity::current()) {
     return tree.begin(entity);
   }
 
   template<typename Entity = DefaultEntity>
-  index_t lend(const Entity &entity = Entity::current()) {
-    return tree.begin(entity) + tree.offset(entity);
+  constexpr index_t lend(const Entity &entity = Entity::current()) {
+    return tree.begin(entity) + tree.total(entity);
   };
 
   /**
@@ -44,9 +47,9 @@ public:
   /**
    * Maps a global coord to a global linear index
    */
-  index_t global_at(coord_t global_coord) {
+  /* index_t global_at(coord_t global_coord) { */
     /* return global_coord; */
-  }
+  /* } */
 
   /**
    * Maps a global coordinate to its default entity

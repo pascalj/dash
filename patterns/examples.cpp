@@ -17,11 +17,23 @@ int main() {
 #ifdef MPI_VERSION
   MPI_Init(NULL, NULL);
 #endif
-  using Pattern = BlockPattern<ValueType>;
-  Pattern p(100);
+  using Tree = BalancedNode<
+      EmptyEntity,
+      BalancedNode<GPU, LeafNode<Process>, LeafNode<Process>>,
+      BalancedNode<GPU, LeafNode<Process>, LeafNode<Process>>>;
+  BlockPattern<Process, Tree> p(100);
 
-  std::cout << "lbegin: " << p.lbegin(Process()) << std::endl;
-  std::cout << "lend: " << p.lend(Process()) << std::endl;
+  const auto nprocs = 4;
+  const auto ngpu = 2;
+
+  for (int i = 0; i < nprocs; i++) {
+    std::cout << "Process[" << i << "]: [" << p.lbegin(Process(i, nprocs)) << ", "
+              << p.lend(Process(i, nprocs)) << ")" << std::endl;
+  }
+  for (int i = 0; i < ngpu; i++) {
+    std::cout << "GPU[" << i << "]: [" << p.lbegin(GPU(i, ngpu)) << ", "
+              << p.lend(GPU(i, ngpu)) << ")" << std::endl;
+  }
 
 #ifdef MPI_VERSION
   MPI_Finalize();

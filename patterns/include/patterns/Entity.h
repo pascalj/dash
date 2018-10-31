@@ -22,30 +22,38 @@
 
 struct EmptyEntity {};
 
-template<typename EntityType>
 struct Entity {
+  Entity() = default;
+
+  Entity(size_t index, size_t total)
+    : index(index)
+    , total(total)
+  {
+  }
+
   // Index of the current entity
-  int index;
+  size_t index;
   // Number of total entities of this type
-  int total;
+  size_t total;
 };
 
 // Number of GPUs
-struct GPU : Entity<GPU> {
+struct GPU : Entity {
+  GPU(size_t index, size_t total) : Entity(index, total) {}
 };
-struct Process : Entity<Process> {
+struct Process : Entity {
+  Process() : Entity(0, 1) {
 #ifdef MPI_VERSION
-  Process() {
-    index = 1;
-    total = 4;
-    /* MPI_Comm_rank(MPI_COMM_WORLD, &index); */
-    /* MPI_Comm_size(MPI_COMM_WORLD, &total); */
-  }
+    MPI_Comm_rank(MPI_COMM_WORLD, &index);
+    MPI_Comm_size(MPI_COMM_WORLD, &total);
 #endif
+  }
+
+  Process(size_t index, size_t total) : Entity(index, total) {}
 };
-struct None : Entity<None> {
+struct None : Entity {
   int index = 0;
-  int total = 1;
+  int total = 0;
 };
 
 
