@@ -2,7 +2,8 @@
 #include "mpi.h"
 #endif
 
-#include "patterns/BlockPattern.h"
+#include "patterns/EntityPattern.h"
+#include "patterns/Entity.h"
 #include <iostream>
 
 
@@ -17,23 +18,12 @@ int main() {
 #ifdef MPI_VERSION
   MPI_Init(NULL, NULL);
 #endif
-  using Tree = BalancedNode<
-      EmptyEntity,
-      BalancedNode<GPU, LeafNode<Process>, LeafNode<Process>>,
-      BalancedNode<GPU, LeafNode<Process>, LeafNode<Process>>>;
-  BlockPattern<Process, Tree> p(100);
 
-  const auto nprocs = 4;
-  const auto ngpu = 2;
+  using Pattern = EntityPattern<
+    ProxyPattern<3, Process, int>
+    >;
 
-  for (int i = 0; i < nprocs; i++) {
-    std::cout << "Process[" << i << "]: [" << p.lbegin(Process(i, nprocs)) << ", "
-              << p.lend(Process(i, nprocs)) << ")" << std::endl;
-  }
-  for (int i = 0; i < ngpu; i++) {
-    std::cout << "GPU[" << i << "]: [" << p.lbegin(GPU(i, ngpu)) << ", "
-              << p.lend(GPU(i, ngpu)) << ")" << std::endl;
-  }
+  Pattern p;
 
 #ifdef MPI_VERSION
   MPI_Finalize();

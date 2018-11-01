@@ -83,5 +83,10 @@ struct entities_in_node<Node<NodeEntity>, Entity> {
   static const size_t value = entity_count::value;
 };
 
+
+template<typename Entity>
+struct team {
+};
+
 #endif
 
