@@ -84,8 +84,25 @@ struct entities_in_node<Node<NodeEntity>, Entity> {
 };
 
 
+template<typename Pattern>
+struct entity {
+  using type = typename Pattern::entity_t;
+};
+
+
 template<typename Entity>
 struct team {
+};
+
+template <typename Entity, typename...> struct with_entity;
+template <typename Entity> struct with_entity<Entity> { using type = std::tuple<>; };
+template <typename Entity, typename Head, typename ...Tail>
+struct with_entity<Entity, Head, Tail...>
+{
+    using type = typename std::conditional<std::is_same<typename entity<Head>::type, Entity>::value,
+                               typename Cons<Head, typename filter<Tail...>::type>::type,
+                               typename filter<Tail...>::type
+                          >::type;
 };
 
 #endif
