@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <future>
 #include <iterator>
 #include <type_traits>
 #include <vector>
@@ -567,6 +568,13 @@ void sort(GlobRandomIt begin, GlobRandomIt end, SortableHash sortable_hash)
 
   std::size_t send_count, send_disp, target_disp;
 
+  // A range of chunks to be merged.
+  using chunk_range_t = std::pair<std::size_t, std::size_t>;
+  // Futures for the merges - only used to signal readiness.
+  // Use a std::map because emplace will not invalidate any
+  // references or iterators.
+  std::map<chunk_range_t, std::future<void>> merge_dependencies;
+
   for (auto const& unit : p_unit_info.valid_remote_partitions) {
     std::tie(send_count, send_disp, target_disp) = get_send_info(unit);
 
@@ -587,27 +595,32 @@ void sort(GlobRandomIt begin, GlobRandomIt end, SortableHash sortable_hash)
                       pattern.global_index(
                           static_cast<dash::team_unit_t>(unit), {})};
 
+    // A chunk range (unit, unit + 1) signals represents the copy. Unit + 1 is
+    // a sentinel here.
+    chunk_range_t unit_range(unit, unit + 1);
     auto&& fut = dash::copy_async(
         &(*(lcopy.begin() + send_disp)),
         &(*(lcopy.begin() + send_disp + send_count)),
         it_copy + target_disp);
 
-    async_copies.emplace_back(std::move(fut));
+    // The std::async is necessary to convert to std::future<void>
+    merge_dependencies.emplace(unit_range, std::async(std::launch::async, [&] { fut.wait(); }));
   }
 
   std::tie(send_count, send_disp, target_disp) = get_send_info(myid);
 
-  if (send_count) {
-    std::copy(
-        std::next(std::begin(lcopy), send_disp),
-        std::next(std::begin(lcopy), send_disp + send_count),
-        std::next(lbegin, target_disp));
-  }
-
-  std::for_each(
-      std::begin(async_copies),
-      std::end(async_copies),
-      [](dash::Future<iter_type>& fut) { fut.wait(); });
+  // Create an entry for the local part
+  chunk_range_t local_range(myid, myid + 1);
+  merge_dependencies[local_range] = std::async(
+      std::launch::async,
+      [send_count, send_disp, lcopy, target_disp, lbegin] {
+        if (send_count) {
+          std::copy(
+              std::next(std::begin(lcopy), send_disp),
+              std::next(std::begin(lcopy), send_disp + send_count),
+              std::next(lbegin, target_disp));
+        }
+      });
 
   trace.exit_state("17:exchange_data (all-to-all)");
 
@@ -663,6 +676,7 @@ void sort(GlobRandomIt begin, GlobRandomIt end, SortableHash sortable_hash)
 
   // merging sorted sequences
   auto nsequences = nunits;
+
   // number of merge steps in the tree
   auto const depth = static_cast<size_t>(std::ceil(std::log2(nsequences)));
 
@@ -690,23 +704,39 @@ void sort(GlobRandomIt begin, GlobRandomIt end, SortableHash sortable_hash)
     // number of merges
     auto const nmerges = nsequences >> 1;
 
-    // These merges are independent from each other and are candidates for
-    // shared memory parallelism
+    // Generate a merge tree that can be processed
     for (std::size_t m = 0; m < nmerges; ++m) {
-      auto first = std::next(lbegin, recv_count_psum[m * dist]);
-      auto mid   = std::next(lbegin, recv_count_psum[m * dist + step]);
+      auto f     = m * dist;
+      auto mi    = m * dist + step;
+      auto l     = std::min(m * dist + dist, recv_count_psum.size() - 1);
+      auto first = std::next(lbegin, recv_count_psum[f]);
+      auto mid   = std::next(lbegin, recv_count_psum[mi]);
       // sometimes we have a lonely merge in the end, so we have to guarantee
       // that we do not access out of bounds
-      auto last = std::next(
-          lbegin,
-          recv_count_psum[std::min(
-              m * dist + dist, recv_count_psum.size() - 1)]);
+      auto last = std::next(lbegin, recv_count_psum[l]);
+      
+      // Start a thread that blocks until the two previous merges are ready.
+      auto&& fut = std::async(
+          [first, mid, last, f, mi, l, d, &merge_dependencies]() {
+            chunk_range_t dep_l(f, mi);
+            merge_dependencies[dep_l].wait();
+            chunk_range_t dep_r(mi, l);
+            merge_dependencies[dep_r].wait();
 
-      std::inplace_merge(first, mid, last);
+            // first level needs to wait for data to arrive
+            std::inplace_merge(first, mid, last);
+            DASH_LOG_TRACE("merged chunks", f, mi, l);
+          });
+      chunk_range_t to_merge(f, l);
+      merge_dependencies.emplace(to_merge, std::move(fut));
     }
 
     nsequences -= nmerges;
   }
+
+  // Wait for the final merge step
+  chunk_range_t final_range(0, nunits);
+  merge_dependencies.at(final_range).wait();
 
   trace.exit_state("19:merge_local_sequences");
 #endif
