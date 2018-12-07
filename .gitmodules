@@ -2,3 +2,6 @@
 	path = vendor/googletest
 	url = https://github.com/google/googletest.git
 	ignore = all
+[submodule "dash/include/boost-168/compute"]
+	path = dash/include/boost-168/compute
+	url = git@github.com:boostorg/compute.git
