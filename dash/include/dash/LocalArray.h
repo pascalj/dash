@@ -83,7 +83,15 @@ struct LocalArray
       return iterator(m_data + TSize);
     }
 
-    friend std::ostream& operator<<(std::ostream& out, const LocalArray& arr);
+    operator std::array<TType, TSize>() const
+    {
+      std::array<TType, TSize> arr;
+      std::copy(std::begin(m_data), std::end(m_data), std::begin(arr));
+      return arr;
+    }
+
+    template <typename T, std::size_t S>
+    friend std::ostream& operator<<(std::ostream& out, const LocalArray<T, S>& arr);
 };
 
 template <typename T, std::size_t S>

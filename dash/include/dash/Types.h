@@ -10,6 +10,18 @@
 #include <cstddef>
 #include <type_traits>
 
+#ifndef FN_HOST
+#define FN_HOST
+#endif
+
+#ifndef FN_HOST_ACC
+#define FN_HOST_ACC
+#endif
+
+#ifdef __NVCC__
+#define FN_HOST __host__
+#define FN_HOST_ACC __host__ __device__
+#endif
 
 namespace dash {
 

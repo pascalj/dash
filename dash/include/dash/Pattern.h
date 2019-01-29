@@ -621,6 +621,7 @@ public:
 
 // Static regular pattern types:
 #include <dash/pattern/BlockPattern.h>
+#include <dash/pattern/SimpleBlockPattern.h>
 #include <dash/pattern/TilePattern.h>
 #include <dash/pattern/ShiftTilePattern.h>
 #include <dash/pattern/SeqTilePattern.h>

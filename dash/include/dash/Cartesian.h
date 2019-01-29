@@ -4,6 +4,7 @@
 #include <dash/Types.h>
 #include <dash/Dimensional.h>
 #include <dash/Exception.h>
+#include <dash/LocalArray.h>
 #include <dash/internal/Logging.h>
 
 #include <array>
@@ -432,11 +433,18 @@ public:
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
     return at<AtArrangement>(
-             std::array<IndexType, NumDimensions> {{
+             LocalArray<IndexType, NumDimensions> {{
                arg, (IndexType)(args) ... }}
            );
   }
 
+  template<
+    MemArrange AtArrangement = Arrangement,
+    typename OffsetType>
+  IndexType at(
+      const LocalArray<OffsetType, NumDimensions> &point) const {
+    return at(std::array<OffsetType, NumDimensions>(point));
+  }
   /**
    * Convert the given cartesian point to its respective linear index.
    *
