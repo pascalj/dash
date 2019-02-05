@@ -35,7 +35,7 @@ private:
 public:
   typedef IndexType                           index_type;
   typedef SizeType                            size_type;
-  typedef std::array<SizeType, NumDimensions> extents_type;
+  typedef LocalArray<SizeType, NumDimensions> extents_type;
 
 public:
   template<dim_t NDim_, typename SizeType_>
@@ -114,11 +114,11 @@ public:
    * Change the extent of the cartesian space in every dimension.
    */
   template<typename... Args>
-  void resize(SizeType arg, Args... args) {
+  FN_HOST_ACC void resize(SizeType arg, Args... args) {
     static_assert(
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
-    std::array<SizeType, NumDimensions> extents =
+    LocalArray<SizeType, NumDimensions> extents =
       {{ arg, (SizeType)(args)... }};
     resize(extents);
   }
@@ -127,11 +127,17 @@ public:
    * Change the extent of the cartesian space in every dimension.
    */
   template<typename SizeType_>
-  void resize(const std::array<SizeType_, NumDimensions> & extents) {
+  FN_HOST void resize(const std::array<SizeType_, NumDimensions> & extents) {
+    resize<SizeType_>(extents);
+  }
+
+  template<typename SizeType_>
+  FN_HOST_ACC void resize(const LocalArray<SizeType_, NumDimensions> & extents) {
     // Update size:
     _size = 1;
-    for(auto i = 0; i < NumDimensions; i++ ) {
-      _extents[i] = static_cast<SizeType>(extents[i]);
+    for(auto i = 0; i < NumDimensions; i++) {
+      _extents[i] = extents[i];
+
       _size      *= _extents[i];
     }
   }
@@ -139,7 +145,7 @@ public:
   /**
    * Change the extent of the cartesian space in the given dimension.
    */
-  void resize(dim_t dim, SizeType extent) {
+  FN_HOST_ACC void resize(dim_t dim, SizeType extent) {
     _extents[dim] = extent;
     resize(_extents);
   }
@@ -179,7 +185,7 @@ public:
    * \param  dim  The dimension in the coordinate
    * \return      The extent in the given dimension
    */
-  SizeType extent(dim_t dim) const {
+  FN_HOST_ACC SizeType extent(dim_t dim) const {
     DASH_ASSERT_RANGE(
       0, dim, NumDimensions-1,
       "Dimension for CartesianSpace::extent(dim) is out of bounds");
@@ -250,7 +256,7 @@ private:
 public:
   typedef IndexType                           index_type;
   typedef SizeType                            size_type;
-  typedef std::array<SizeType, NumDimensions> extents_type;
+  typedef LocalArray<SizeType, NumDimensions> extents_type;
 
   template<dim_t NDim_>
   friend std::ostream & operator<<(
@@ -288,18 +294,27 @@ public:
   /**
    * Constructor, creates a cartesian index space of given extents.
    */
-  CartesianIndexSpace(
+  FN_HOST_ACC CartesianIndexSpace(
     const extents_type & extents)
   : _extents(extents)
   {
     resize(extents);
   }
 
+  FN_HOST CartesianIndexSpace(
+    const std::array<SizeType, NumDimensions> & extents)
+  : _extents(extents)
+  {
+    resize(LocalArray<SizeType, NumDimensions>(extents));
+  }
+
+
+
   /**
    * Constructor, creates a cartesian index space of given extents.
    */
   template<typename... Args>
-  CartesianIndexSpace(SizeType arg, Args... args)
+  FN_HOST_ACC CartesianIndexSpace(SizeType arg, Args... args)
   : _extents({{ }})
   {
     resize(arg, args...);
@@ -361,7 +376,7 @@ public:
    * Change the extent of the cartesian space in every dimension.
    */
   template<typename SizeType_>
-  void resize(const std::array<SizeType_, NumDimensions> & extents) {
+  FN_HOST_ACC void resize(const LocalArray<SizeType_, NumDimensions> & extents) {
     // Update size:
     _size = 1;
     for(auto i = 0; i < NumDimensions; i++ ) {
@@ -377,6 +392,11 @@ public:
     for(auto i = 1; i < NumDimensions; ++i) {
       _offset_col_major[i] = _offset_col_major[i-1] * _extents[i-1];
     }
+  }
+
+  template<typename SizeType_>
+  FN_HOST void resize(const std::array<SizeType_, NumDimensions> & extents) {
+    resize(LocalArray<SizeType_, NumDimensions>(extents));
   }
 
   /**
@@ -410,7 +430,7 @@ public:
    * \param  dim  The dimension in the coordinate
    * \return      The extent in the given dimension
    */
-  SizeType extent(dim_t dim) const {
+  FN_HOST_ACC SizeType extent(dim_t dim) const {
     DASH_ASSERT_RANGE(
       0, dim, NumDimensions-1,
       "Given dimension " << dim <<
@@ -442,8 +462,9 @@ public:
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
   IndexType at(
-      const LocalArray<OffsetType, NumDimensions> &point) const {
-    return at(std::array<OffsetType, NumDimensions>(point));
+      const std::array<OffsetType, NumDimensions> & point
+     ) const {
+    return at(LocalArray<OffsetType, NumDimensions>(point));
   }
   /**
    * Convert the given cartesian point to its respective linear index.
@@ -454,8 +475,8 @@ public:
   template<
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
-  IndexType at(
-    const std::array<OffsetType, NumDimensions> & point) const {
+  FN_HOST_ACC IndexType at(
+    const LocalArray<OffsetType, NumDimensions> &point) const {
     SizeType offs = 0;
     DASH_ASSERT_GT(_size, 0, "CartesianIndexSpace has size 0");
     for (auto i = 0; i < NumDimensions; i++) {
@@ -487,7 +508,7 @@ public:
   template<
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
-  IndexType at(
+  FN_HOST_ACC IndexType at(
     const std::array<OffsetType, NumDimensions> & point,
     const ViewSpec_t & viewspec) const {
     std::array<OffsetType, NumDimensions> coords{};
@@ -502,7 +523,7 @@ public:
    * Inverse of \c at(...).
    */
   template<MemArrange CoordArrangement = Arrangement>
-  std::array<IndexType, NumDimensions> coords(
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> coords(
     IndexType index) const
   {
     DASH_ASSERT_GT(_size, 0, "CartesianIndexSpace has size 0");
@@ -510,7 +531,7 @@ public:
       0, index, static_cast<IndexType>(_size-1),
       "Given index for CartesianIndexSpace::coords() is out of bounds");
 
-    ::std::array<IndexType, NumDimensions> pos{};
+    LocalArray<IndexType, NumDimensions> pos{};
     if (CoordArrangement == ROW_MAJOR) {
       for(auto i = 0; i < NumDimensions; ++i) {
         pos[i] = index / _offset_row_major[i];

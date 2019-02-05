@@ -92,7 +92,7 @@ private:
   /// dimensions
   DistributionSpec_t          _distspec;
   /// Team containing the units to which the patterns element are mapped
-  dash::Team *                _team            = nullptr;
+  team_unit_t                _myid;
   /// Cartesian arrangement of units within the team
   TeamSpec_t                  _teamspec;
   /// Total amount of units to which this pattern's elements are mapped
@@ -211,14 +211,14 @@ public:
       /// Team containing units to which this pattern maps its elements
       dash::Team &team = dash::Team::All())
     : _distspec(std::move(dist))
-    , _team(&team)
-    , _teamspec(teamspec, _distspec, *_team)
+    , _myid(team.myid())
+    , _teamspec(teamspec, _distspec, team)
     , _nunits(_teamspec.size())
     , _memory_layout(sizespec.extents())
     , _blocksize_spec(
           initialize_blocksizespec(sizespec, _distspec, _teamspec))
     , _blockspec(initialize_blockspec(sizespec, _distspec, _blocksize_spec))
-    , _local_memory_layout(initialize_local_extents(_team->myid()))
+    , _local_memory_layout(initialize_local_extents(_myid))
     , _local_blockspec(
           initialize_local_blockspec(_blocksize_spec, _local_memory_layout))
     , _local_capacity(initialize_local_capacity())
@@ -272,14 +272,14 @@ public:
       /// Team containing units to which this pattern maps its elements
       Team &team = dash::Team::All())
     : _distspec(std::move(dist))
-    , _team(&team)
-    , _teamspec(_distspec, *_team)
+    , _myid(team.myid())
+    , _teamspec(_distspec, team)
     , _nunits(_teamspec.size())
     , _memory_layout(sizespec.extents())
     , _blocksize_spec(
           initialize_blocksizespec(sizespec, _distspec, _teamspec))
     , _blockspec(initialize_blockspec(sizespec, _distspec, _blocksize_spec))
-    , _local_memory_layout(initialize_local_extents(_team->myid()))
+    , _local_memory_layout(initialize_local_extents(_myid))
     , _local_blockspec(
           initialize_local_blockspec(_blocksize_spec, _local_memory_layout))
     , _local_capacity(initialize_local_capacity())
@@ -294,7 +294,7 @@ public:
    */
   SimpleBlockPattern(const self_t & other)
   : _distspec(other._distspec),
-    _team(other._team),
+    _myid(other._myid),
     _teamspec(other._teamspec),
     _nunits(other._nunits),
     _memory_layout(other._memory_layout),
@@ -361,7 +361,7 @@ public:
     DASH_LOG_TRACE("SimpleBlockPattern.=(other)");
     if (this != &other) {
       _distspec            = other._distspec;
-      _team                = other._team;
+      _myid               = other._myid;
       _teamspec            = other._teamspec;
       _memory_layout       = other._memory_layout;
       _local_memory_layout = other._local_memory_layout;
@@ -406,7 +406,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  team_unit_t unit_at(
+  FN_HOST_ACC team_unit_t unit_at(
     /// Absolute coordinates of the point
     const LocalArray<IndexType, NumDimensions> & coords,
     /// View specification (offsets) to apply on \c coords
@@ -425,7 +425,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  team_unit_t unit_at(
+  FN_HOST_ACC team_unit_t unit_at(
     const LocalArray<IndexType, NumDimensions> & coords) const
   {
     LocalArray<IndexType, NumDimensions> unit_coords{};
@@ -552,7 +552,7 @@ public:
   constexpr LocalArray<SizeType, NumDimensions> local_extents(
       team_unit_t unit) const noexcept
   {
-    return ( unit == _team->myid()
+    return ( unit == _myid
              ? _local_memory_layout.extents()
              : initialize_local_extents(unit)
            );
@@ -633,7 +633,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  LocalArray<IndexType, NumDimensions> local_coords(
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> local_coords(
     const LocalArray<IndexType, NumDimensions> & global_coords) const
   {
     LocalArray<IndexType, NumDimensions> local_coords{};
@@ -653,7 +653,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  local_index_t local_index(
+  FN_HOST_ACC local_index_t local_index(
     const LocalArray<IndexType, NumDimensions> & global_coords) const
   {
     DASH_LOG_TRACE_VAR("SimpleBlockPattern.local_index()", global_coords);
@@ -663,7 +663,7 @@ public:
     LocalArray<IndexType, NumDimensions> l_coords =
       local_coords(global_coords);
     DASH_LOG_TRACE_VAR("SimpleBlockPattern.local_index", l_coords);
-    if (unit == _team->myid()) {
+    if (unit == _myid) {
       // Coords are local to this unit, use pre-generated local memory
       // layout
       return local_index_t { unit, _local_memory_layout.at(l_coords) };
@@ -686,7 +686,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  LocalArray<IndexType, NumDimensions> global(
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> global(
     team_unit_t unit,
     const LocalArray<IndexType, NumDimensions> & local_coords) const
   {
@@ -723,10 +723,10 @@ public:
    *
    * \see  DashPatternConcept
    */
-  LocalArray<IndexType, NumDimensions> global(
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> global(
     const LocalArray<IndexType, NumDimensions> & local_coords) const
   {
-    return global(_team->myid(), local_coords);
+    return global(_myid, local_coords);
   }
 
   /**
@@ -744,7 +744,7 @@ public:
       _local_memory_layout.coords(local_index);
     DASH_LOG_TRACE_VAR("SimpleBlockPattern.local_to_global_idx()", local_coords);
     LocalArray<IndexType, NumDimensions> global_coords =
-      global(_team->myid(), local_coords);
+      global(_myid, local_coords);
     DASH_LOG_TRACE_VAR("SimpleBlockPattern.local_to_global_idx >", global_coords);
     return _memory_layout.at(global_coords);
   }
@@ -839,7 +839,7 @@ public:
     LocalArray<IndexType, NumDimensions> l_coords =
       local_coords(global_coords);
     DASH_LOG_TRACE_VAR("SimpleBlockPattern.at", l_coords);
-    if (unit == _team->myid()) {
+    if (unit == _myid) {
       // Coords are local to this unit, use pre-generated local memory
       // layout
       return _local_memory_layout.at(l_coords);
@@ -955,7 +955,7 @@ public:
   constexpr bool is_local(
     IndexType index) const noexcept
   {
-    return is_local(index, team().myid());
+    return is_local(index, _myid);
   }
 
   ////////////////////////////////////////////////////////////////////////////
@@ -1222,10 +1222,6 @@ public:
    * The Team containing the units to which this pattern's elements are
    * mapped.
    */
-  constexpr dash::Team & team() const noexcept
-  {
-    return *_team;
-  }
 
   /**
    * Distribution specification of this pattern.
@@ -1321,7 +1317,7 @@ public:
    * compared to the regular blocksize (\see blocksize(d)), with
    * 0 <= \c underfilled_blocksize(d) < blocksize(d).
    */
-  SizeType underfilled_blocksize(
+  FN_HOST_ACC SizeType underfilled_blocksize(
     dim_t dimension) const
   {
     // Underflow blocksize = regular blocksize - overflow blocksize:
@@ -1339,7 +1335,7 @@ private:
 
   SimpleBlockPattern(const PatternArguments_t & arguments)
   :  _distspec(arguments.distspec()),
-     _team(&arguments.team()),
+     _myid(arguments.team()->myid()),
      _teamspec(arguments.teamspec()),
      _nunits(_teamspec.size()),
      _memory_layout(arguments.sizespec().extents()),
@@ -1352,7 +1348,7 @@ private:
          _distspec,
          _blocksize_spec)),
      _local_memory_layout(
-         initialize_local_extents(_team->myid())),
+         initialize_local_extents(_myid)),
      _local_blockspec(initialize_local_blockspec(
          _blocksize_spec,
          _local_memory_layout)),
@@ -1489,7 +1485,7 @@ private:
   /**
    * Resolve extents of local memory layout for a specified unit.
    */
-  LocalArray<SizeType, NumDimensions> initialize_local_extents(
+  FN_HOST_ACC LocalArray<SizeType, NumDimensions> initialize_local_extents(
       team_unit_t unit) const
   {
     DASH_LOG_DEBUG_VAR("SimpleBlockPattern.init_local_extents()", unit);

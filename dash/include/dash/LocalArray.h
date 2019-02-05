@@ -22,7 +22,7 @@ struct LocalArray
   using const_iterator = TType*;
 
   template <typename TInput>
-  FN_HOST LocalArray(TInput inputArr)
+  FN_HOST_ACC LocalArray(TInput inputArr)
   {
     size_t i = 0;
     for (auto extent : inputArr) {
@@ -34,7 +34,7 @@ struct LocalArray
 
     LocalArray(const LocalArray<TType, TSize> &) = default;
 
-   // LocalArray(LocalArray<TType, TSize> &&) = default;
+    LocalArray(LocalArray<TType, TSize> &&) = default;
 
     FN_HOST_ACC
     LocalArray(std::initializer_list<TType> ilist) {
@@ -76,10 +76,10 @@ struct LocalArray
     FN_HOST_ACC bool
     empty() const noexcept { return size() == 0; }
 
-    iterator begin() noexcept {
+    FN_HOST_ACC iterator begin() noexcept {
       return iterator(m_data);
     }
-    iterator end() noexcept {
+    FN_HOST_ACC iterator end() noexcept {
       return iterator(m_data + TSize);
     }
 

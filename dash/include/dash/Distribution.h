@@ -60,7 +60,7 @@ public:
    * in the distribution's dimension.
    */
   template <typename IndexType, typename SizeType>
-  inline IndexType local_index_to_block_coord(
+  FN_HOST_ACC inline IndexType local_index_to_block_coord(
     // The unit's offset in the distribution's dimension
     // within the global team specification
     IndexType unit_teamspec_coord,
@@ -99,10 +99,9 @@ public:
                        "num_units_in_dim", num_units_in_dim);
         return unit_teamspec_coord + local_index * num_units_in_dim;
       default:
-        DASH_THROW(
-          dash::exception::InvalidArgument,
-          "Distribution type undefined in " <<
-          "local_index_to_block_coord");
+        // TODO: clean mechanism for accelerators
+        DASH_LOG_TRACE("Invalid argument in local_index_to_block_coord");
+        return 0;
     }
   }
 
