@@ -5,6 +5,7 @@
 #include <dash/Distribution.h>
 #include <dash/Team.h>
 #include <dash/Exception.h>
+#include <dash/LocalArray.h>
 
 #include <array>
 #include <sstream>
@@ -450,8 +451,8 @@ public:
 private:
   SizeType                             _size    = 0;
   SizeType                             _rank    = NumDimensions;
-  std::array<SizeType, NumDimensions>  _extents = {{ }};
-  std::array<IndexType, NumDimensions> _offsets = {{ }};
+  LocalArray<SizeType, NumDimensions>  _extents = {{ }};
+  LocalArray<IndexType, NumDimensions> _offsets = {{ }};
 
 public:
   /**
@@ -654,7 +655,7 @@ public:
     return _extents[dimension];
   }
 
-  constexpr const std::array<SizeType, NumDimensions> & extents() const
+  constexpr const LocalArray<SizeType, NumDimensions> & extents() const
   {
     return _extents;
   }
@@ -663,7 +664,7 @@ public:
     return _extents[dim];
   }
 
-  constexpr const std::array<IndexType, NumDimensions> & offsets() const
+  constexpr const LocalArray<IndexType, NumDimensions> & offsets() const
   {
     return _offsets;
   }

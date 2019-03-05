@@ -533,7 +533,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr std::array<SizeType, NumDimensions> local_extents(
+  constexpr LocalArray<SizeType, NumDimensions> local_extents(
       team_unit_t unit = UNDEFINED_TEAM_UNIT_ID) const
   {
     return ( ( unit == UNDEFINED_TEAM_UNIT_ID ||
@@ -1412,7 +1412,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  constexpr const std::array<SizeType, NumDimensions> & extents() const {
+  constexpr const LocalArray<SizeType, NumDimensions> & extents() const {
     return _memory_layout.extents();
   }
 
@@ -1659,7 +1659,7 @@ private:
   /**
    * Resolve extents of local memory layout for a specified unit.
    */
-  std::array<SizeType, NumDimensions> initialize_local_extents(
+  LocalArray<SizeType, NumDimensions> initialize_local_extents(
     team_unit_t unit) const
   {
     // Coordinates of local unit id in team spec:

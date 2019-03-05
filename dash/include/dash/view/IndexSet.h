@@ -681,7 +681,7 @@ class IndexSetSub
   constexpr std::array<size_type, NDim> extents() const {
     return dash::ce::replace_nth<SubDim>(
              extent<SubDim>(),
-             this->domain().extents());
+             std::array<size_type, NDim>(this->domain().extents()));
   }
 
   // ---- offsets ---------------------------------------------------------

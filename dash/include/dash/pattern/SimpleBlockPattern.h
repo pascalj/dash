@@ -568,7 +568,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  IndexType local_at(
+  FN_HOST_ACC IndexType local_at(
     /// Point in local memory
     const LocalArray<IndexType, NumDimensions> & local_coords,
     /// View specification (offsets) to apply on \c coords
@@ -586,7 +586,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  constexpr IndexType local_at(
+  FN_HOST_ACC constexpr IndexType local_at(
     /// Point in local memory
     const LocalArray<IndexType, NumDimensions> & local_coords) const
   {
@@ -601,7 +601,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  local_coords_t local(
+  FN_HOST_ACC local_coords_t local(
     const LocalArray<IndexType, NumDimensions> & global_coords) const
   {
     local_coords_t l_coords;

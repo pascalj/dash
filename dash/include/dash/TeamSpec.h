@@ -394,11 +394,20 @@ public:
    * Change the extent of the cartesian space in every dimension.
    */
   template<typename SizeType_>
-  void resize(const std::array<SizeType_, MaxDimensions> & extents)
+  void resize(const LocalArray<SizeType_, MaxDimensions> & extents)
   {
     _is_linear = false;
     parent_t::resize(extents);
     update_rank();
+  }
+
+  /**
+   * Change the extent of the cartesian space in every dimension.
+   */
+  template<typename SizeType_>
+  void resize(const std::array<SizeType_, MaxDimensions> & extents)
+  {
+    resize<SizeType_>(LocalArray<SizeType_, MaxDimensions>(extents));
   }
 
   /**

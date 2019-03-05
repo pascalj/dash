@@ -1377,8 +1377,8 @@ public:
           safe_extent -= _halo_extents_max[d].first - global_offset;
         } else {
           bnd_elem_offsets[d] -= global_offset;
-          push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents,
-                         _halo_extents_max, bound_spec);
+          // push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents,
+          //               _halo_extents_max, bound_spec);
         }
         auto check_extent =
           global_offset + view_extent + _halo_extents_max[d].second;
@@ -1387,19 +1387,20 @@ public:
         } else {
           bnd_elem_offsets[d] += view_extent - _halo_extents_max[d].first;
           bnd_elem_extents[d] = _halo_extents_max[d].second;
-          push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents,
-                         _halo_extents_max, bound_spec);
+          //push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents,
+           //              _halo_extents_max, bound_spec);
         }
         _view_inner_with_boundaries.resize_dim(d, safe_offset - global_offset,
                                                safe_extent);
       } else {
         bnd_elem_offsets[d] -= global_offset;
-        push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents, _halo_extents_max,
-                       bound_spec);
+        //push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents, _halo_extents_max,
+        //               bound_spec);
         bnd_elem_offsets[d] += view_extent - _halo_extents_max[d].first;
         bnd_elem_extents[d] = _halo_extents_max[d].second;
-        push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents, _halo_extents_max,
-                       bound_spec);
+        // TODO: fix
+        //push_bnd_elems(d, bnd_elem_offsets, bnd_elem_extents, _halo_extents_max,
+        //               bound_spec);
       }
     }
   }

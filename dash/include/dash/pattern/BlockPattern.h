@@ -570,7 +570,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr std::array<SizeType, NumDimensions> local_extents(
+  constexpr LocalArray<SizeType, NumDimensions> local_extents(
       team_unit_t unit) const noexcept
   {
     return ( unit == _team->myid()
@@ -1271,7 +1271,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  constexpr const std::array<SizeType, NumDimensions> &
+  constexpr const LocalArray<SizeType, NumDimensions> &
   extents() const noexcept
   {
     return _memory_layout.extents();
@@ -1510,7 +1510,7 @@ private:
   /**
    * Resolve extents of local memory layout for a specified unit.
    */
-  std::array<SizeType, NumDimensions> initialize_local_extents(
+  LocalArray<SizeType, NumDimensions> initialize_local_extents(
       team_unit_t unit) const
   {
     DASH_LOG_DEBUG_VAR("BlockPattern.init_local_extents()", unit);

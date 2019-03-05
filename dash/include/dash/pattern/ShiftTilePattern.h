@@ -1371,7 +1371,7 @@ public:
    *
    * \see DashPatternConcept
    */
-  const std::array<SizeType, NumDimensions> & extents() const {
+  const LocalArray<SizeType, NumDimensions> & extents() const {
     return _memory_layout.extents();
   }
 
