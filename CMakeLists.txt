@@ -13,6 +13,10 @@ else()
   set(DEFAULT_COMPTIME_RED off)
 endif()
 
+include_directories("patterns/include")
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/patterns/include/patterns
+        DESTINATION include FILES_MATCHING PATTERN "*.h")
+
 ## Build options
 option(BUILD_TESTS
        "Whether tests should be built" on)
