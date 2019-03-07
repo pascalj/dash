@@ -7,7 +7,7 @@
 namespace patterns {
 
 class CudaEntity {
-  size_t current() const
+  size_t index() const
   {
     int device;
     cudaGetDevice(&device);
@@ -19,7 +19,6 @@ class CudaEntity {
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
     return deviceCount;
-
   }
 };
 
