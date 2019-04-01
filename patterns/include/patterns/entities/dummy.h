@@ -19,6 +19,13 @@ class DummyEntity {
   {
     return _total;
   }
+
+  DummyEntity() = default;
+  DummyEntity(size_t current, size_t total)
+    : _current(current)
+    , _total(total)
+  {
+  }
 };
 
 }

@@ -775,6 +775,14 @@ public:
   }
 
   /**
+   * Cartesian arrangement of pattern blocks.
+   */
+  constexpr const BlockSpec_t local_blockspec() const
+  {
+    return _nlblocks;
+  }
+
+  /**
    * Index of block at given global coordinates.
    *
    * \see  DashPatternConcept
