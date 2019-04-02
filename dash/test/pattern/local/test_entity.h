@@ -6,7 +6,6 @@
 struct TestEntity {
   std::size_t _index = 0;
   std::size_t _total = 1;
-
   TestEntity(size_t index, size_t total)
     : _index(index)
     , _total(total)

@@ -8,13 +8,6 @@
  * Test fixture for class dash::Pattern
  */
 class BalancedLocalPatternTest : public dash::test::TestBase {
-protected:
-  BalancedLocalPatternTest()
-  { }
-
-  virtual void SetUp() {
-    dash::test::TestBase::SetUp();
-  }
 };
 
-#endif // DASH__TEST__BLOCK_PATTERN_TEST_H_
+#endif  // DASH__TEST__BLOCK_PATTERN_TEST_H_
