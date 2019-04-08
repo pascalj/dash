@@ -20,8 +20,8 @@ TEST_F(BalancedLocalPatternTest, OneBlock)
 
   // Because there is only one block per unit, only the first entity should
   // be assigned a block
-  EXPECT_EQ_U(pattern.blocks_for_entity(e1), 1);
-  EXPECT_EQ_U(pattern.blocks_for_entity(e2), 0);
+  EXPECT_EQ_U(pattern.nblocks_for_entity(e1), 1);
+  EXPECT_EQ_U(pattern.nblocks_for_entity(e2), 0);
 }
 
 TEST_F(BalancedLocalPatternTest, EqualBlocks)
@@ -42,19 +42,15 @@ TEST_F(BalancedLocalPatternTest, EqualBlocks)
   // be assigned a block
   //
   auto local_blocks = pattern.local_blockspec();
-  auto e1_blocks    = pattern.blocks_for_entity(e1);
-  auto e2_blocks    = pattern.blocks_for_entity(e2);
-  auto e3_blocks    = pattern.blocks_for_entity(e3);
+  auto e1_blocks    = pattern.nblocks_for_entity(e1);
+  auto e2_blocks    = pattern.nblocks_for_entity(e2);
+  auto e3_blocks    = pattern.nblocks_for_entity(e3);
 
   EXPECT_EQ_U(e1_blocks + e2_blocks + e3_blocks, local_blocks.size());
 }
 
 TEST_F(BalancedLocalPatternTest, TwoDimensional)
 {
-  TestEntity e1(0, 3);
-  TestEntity e2(1, 3);
-  TestEntity e3(2, 3);
-
   const auto x            = 50;
   const auto y            = 20;
   const auto block_height = 5;
@@ -66,17 +62,21 @@ TEST_F(BalancedLocalPatternTest, TwoDimensional)
       dash::BLOCKCYCLIC(block_height), dash::NONE);
 
   BasePattern base{sizespec, distspec, dash::TeamSpec<2>(dash::Team::All())};
-  patterns::BalancedLocalPattern<BasePattern, TestEntity> pattern(base);
+  patterns::BalancedLocalPattern<BasePattern, TestEntity> pattern{base};
 
-  const auto local_blocks = pattern.local_blockspec();
-  const auto e1_blocks    = pattern.blocks_for_entity(e1);
-  const auto e2_blocks    = pattern.blocks_for_entity(e2);
-  const auto e3_blocks    = pattern.blocks_for_entity(e3);
+  size_t sum = 0;
+  for(size_t i = 0; i < 3; i++) {
+    TestEntity e{i, 3};
+    const auto nblocks = pattern.nblocks_for_entity(e);
+    if(nblocks > 0) {
+      const auto expected_lbegin = i * block_height * y;
+      EXPECT_EQ_U(pattern.lbegin(e), expected_lbegin);
+    }
+
+    sum += nblocks;
+  }
 
   // Check whether all local blocks were distribted to entities
-  EXPECT_EQ_U(e1_blocks + e2_blocks + e3_blocks, local_blocks.size());
-  const auto expected_lbegin = block_height * y * dash::myid();
-  std::cout << "P: " << pattern.block_for_entity(e1, 0)
-            << " (expected: " << expected_lbegin << ")" << std::endl;
-  EXPECT_EQ_U(pattern.lbegin(e1), expected_lbegin);
+  const auto local_blocks = pattern.local_blockspec();
+  EXPECT_EQ_U(sum, local_blocks.size());
 }

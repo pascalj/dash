@@ -2,6 +2,7 @@
 #define PATTERNS__LOCAL_PATTERN_H
 
 #include <cstddef>
+#include <cmath>
 
 namespace patterns {
 
@@ -30,7 +31,7 @@ public:
     return this->local_block_local(block_index);
   }
 
-  size_t blocks_for_entity(Entity entity) const
+  size_t nblocks_for_entity(Entity entity) const
   {
     auto const entity_blocks = _local_blocks / entity.total();
     auto const add = ((_local_blocks % entity.total()) <= entity.index()) ? 0 : 1;
@@ -39,7 +40,7 @@ public:
 
   size_t lbegin(Entity entity)
   {
-    auto first_block = local_block_local(entity.index());
+    auto first_block = this->local_block_local(entity.index());
     return this->local_at(first_block.offsets());
   }
 
@@ -71,17 +72,23 @@ public:
 
   auto block_for_entity(Entity entity, size_t index) const
   {
-    auto block_index = index + (entity.index() * entity.total());
+    auto block_index =
+        (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
+         entity.index()) +
+        index;
     return this->local_block(block_index);
   }
 
   auto block_local_for_entity(Entity entity, size_t index) const
   {
-    auto block_index = index + (entity.index() * entity.total());
+    auto block_index =
+        (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
+         entity.index()) +
+        index;
     return this->local_block_local(block_index);
   }
 
-  size_t blocks_for_entity(Entity entity) const
+  size_t nblocks_for_entity(Entity entity) const
   {
     auto const entity_blocks = _local_blocks / entity.total();
     auto const add =
@@ -91,14 +98,17 @@ public:
 
   size_t lbegin(Entity entity)
   {
-    auto first_blockspec = this->block_for_entity(entity, 0);
+    auto first_blockspec = this->block_local_for_entity(entity, 0);
+    DASH_LOG_TRACE(
+        "BalancedLocalPattern.lbegin", "first_blockspec", first_blockspec);
     return this->local_at(first_blockspec.offsets());
   }
 
   size_t lend(Entity entity)
   {
-    auto last_blockspec = blocks_for_entity(entity);
-    return this->local_at(last_blockspec.offsets() + last_blockspec.size());
+    auto total_local_blocks = nblocks_for_entity(entity);
+    auto last_blockspec = this->block_local_for_entity(entity, total_local_blocks - 1);
+    return this->local_at(last_blockspec.offsets()) + last_blockspec.size();
   }
 
 private:
