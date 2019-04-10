@@ -80,3 +80,32 @@ TEST_F(BalancedLocalPatternTest, TwoDimensional)
   const auto local_blocks = pattern.local_blockspec();
   EXPECT_EQ_U(sum, local_blocks.size());
 }
+
+TEST_F(BalancedLocalPatternTest, BlockRange) {
+  const auto x            = 50;
+  const auto y            = 20;
+  const auto block_height = 5;
+
+  using BasePattern = dash::TilePattern<2>;
+
+  dash::SizeSpec<2>         sizespec(x, y);
+  dash::DistributionSpec<2> distspec(
+      dash::BLOCKCYCLIC(block_height), dash::NONE);
+
+  BasePattern base{sizespec, distspec, dash::TeamSpec<2>(dash::Team::All())};
+  patterns::BalancedLocalPattern<BasePattern, TestEntity> pattern{base};
+
+  // force some empty entities
+  const size_t total_entities = x / block_height / dash::size() - 1;
+
+  // Each new block should be offset by block_height (regardless of entity)
+  size_t x_offset = 0;
+  for (size_t i = 0; i < total_entities; i++) {
+    TestEntity e{i, total_entities};
+    for (auto& block : pattern.blocks_local_for_entity(e)) {
+      EXPECT_EQ_U(x_offset, block.offsets()[0]);
+      x_offset += block_height;
+    }
+  }
+}
+
