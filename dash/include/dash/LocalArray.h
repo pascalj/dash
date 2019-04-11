@@ -22,6 +22,7 @@ struct LocalArray
   using const_iterator = TType*;
 
   FN_HOST_ACC LocalArray()
+    : m_data{}
   {
   }
 
