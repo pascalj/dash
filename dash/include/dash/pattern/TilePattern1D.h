@@ -101,7 +101,7 @@ public:
   } local_index_t;
   typedef struct {
     team_unit_t                             unit;
-    std::array<index_type, NumDimensions> coords;
+    LocalArray<index_type, NumDimensions> coords;
   } local_coords_t;
 
 private:
@@ -207,7 +207,7 @@ public:
     /// Team containing units to which this pattern maps its elements
     dash::Team &             team     = dash::Team::All())
   : _size(sizespec.size()),
-    _memory_layout(std::array<SizeType, 1> {{ _size }}),
+    _memory_layout(LocalArray<SizeType, 1> {{ _size }}),
     _distspec(dist),
     _team(&team),
     _teamspec(
@@ -225,7 +225,7 @@ public:
         _nunits)),
     _local_size(
         initialize_local_extent(_team->myid())),
-    _local_memory_layout(std::array<SizeType, 1> {{ _local_size }}),
+    _local_memory_layout(LocalArray<SizeType, 1> {{ _local_size }}),
     _nlblocks(initialize_num_local_blocks(
         _blocksize,
         _local_size)),
@@ -269,7 +269,7 @@ public:
       /// Team containing units to which this pattern maps its elements
       Team &team = dash::Team::All())
     : _size(sizespec.size())
-    , _memory_layout(std::array<SizeType, 1>{{_size}})
+    , _memory_layout(LocalArray<SizeType, 1>{{_size}})
     , _distspec(std::move(dist))
     , _team(&team)
     , _teamspec(_distspec, *_team)
@@ -277,7 +277,7 @@ public:
     , _blocksize(initialize_blocksize(_size, _distspec, _nunits))
     , _nblocks(initialize_num_blocks(_size, _blocksize, _nunits))
     , _local_size(initialize_local_extent(_team->myid()))
-    , _local_memory_layout(std::array<SizeType, 1>{{_local_size}})
+    , _local_memory_layout(LocalArray<SizeType, 1>{{_local_size}})
     , _nlblocks(initialize_num_local_blocks(_blocksize, _local_size))
     , _local_capacity(initialize_local_capacity())
   {
@@ -367,7 +367,7 @@ public:
    */
   team_unit_t unit_at(
     /// Absolute coordinates of the point
-    const std::array<IndexType, NumDimensions> & coords,
+    const LocalArray<IndexType, NumDimensions> & coords,
     /// View specification (offsets) to apply on \c coords
     const ViewSpec_t & viewspec) const {
     DASH_LOG_TRACE_VAR("TilePattern<1>.unit_at()", coords);
@@ -384,7 +384,7 @@ public:
    * \see DashPatternConcept
    */
   team_unit_t unit_at(
-    const std::array<IndexType, NumDimensions> & coords) const {
+    const LocalArray<IndexType, NumDimensions> & coords) const {
     DASH_LOG_TRACE_VAR("TilePattern<1>.unit_at()", coords);
     team_unit_t unit_id((coords[0] / _blocksize) % _nunits);
     DASH_LOG_TRACE_VAR("TilePattern<1>.unit_at >", unit_id);
@@ -465,9 +465,9 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr std::array<SizeType, NumDimensions> local_extents(
+  constexpr LocalArray<SizeType, NumDimensions> local_extents(
       team_unit_t unit = UNDEFINED_TEAM_UNIT_ID) const {
-    return std::array<SizeType, 1> {{ _local_size }};
+    return LocalArray<SizeType, 1> {{ _local_size }};
   }
 
   ////////////////////////////////////////////////////////////////////////////
@@ -482,7 +482,7 @@ public:
    */
   constexpr IndexType local_at(
     /// Point in local memory
-    const std::array<IndexType, NumDimensions> & local_coords,
+    const LocalArray<IndexType, NumDimensions> & local_coords,
     /// View specification (offsets) to apply on \c coords
     const ViewSpec_t & viewspec) const {
     return local_coords[0] + viewspec[0].offset;
@@ -495,7 +495,7 @@ public:
    */
   constexpr IndexType local_at(
     /// Point in local memory
-    const std::array<IndexType, NumDimensions> & local_coords) const {
+    const LocalArray<IndexType, NumDimensions> & local_coords) const {
     return local_coords[0];
   }
 
@@ -508,7 +508,7 @@ public:
    * \see  DashPatternConcept
    */
   constexpr local_coords_t local(
-    const std::array<IndexType, NumDimensions> & global_coords) const {
+    const LocalArray<IndexType, NumDimensions> & global_coords) const {
     return local_coords_t {{
              unit_at(global_coords),
              local_coords(global_coords)
@@ -522,7 +522,7 @@ public:
    *
    * \see  DashPatternConcept
    */
-  local_index_t local(
+  FN_HOST_ACC local_index_t local(
     IndexType g_index) const {
     DASH_LOG_TRACE_VAR("TilePattern<1>.local()", g_index);
     index_type  g_block_index = g_index / _blocksize;
@@ -541,15 +541,15 @@ public:
    *
    * \see  DashPatternConcept
    */
-  std::array<IndexType, NumDimensions> local_coords(
-    const std::array<IndexType, NumDimensions> & global_coords) const {
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> local_coords(
+    const LocalArray<IndexType, NumDimensions> & global_coords) const {
     IndexType local_coord;
     auto g_index        = global_coords[0];
     auto elem_phase     = g_index % _blocksize;
     auto g_block_offset = g_index / _blocksize;
     auto l_block_offset = g_block_offset / _nunits;
     local_coord         = (l_block_offset * _blocksize) + elem_phase;
-    return std::array<IndexType, 1> {{ local_coord }};
+    return LocalArray<IndexType, 1> {{ local_coord }};
   }
 
   /**
@@ -558,8 +558,8 @@ public:
    *
    * \see  DashPatternConcept
    */
-  local_index_t local_index(
-    const std::array<IndexType, NumDimensions> & g_coords) const {
+  FN_HOST_ACC local_index_t local_index(
+    const LocalArray<IndexType, NumDimensions> & g_coords) const {
     DASH_LOG_TRACE_VAR("TilePattern<1>.local_index()", g_coords);
     index_type  g_block_index = g_coords[0] / _blocksize;
     index_type  l_phase       = g_coords[0] % _blocksize;
@@ -581,9 +581,9 @@ public:
    *
    * \see  DashPatternConcept
    */
-  std::array<IndexType, NumDimensions> global(
+  FN_HOST_ACC LocalArray<IndexType, NumDimensions> global(
     team_unit_t unit,
-    const std::array<IndexType, NumDimensions> & local_coords) const {
+    const LocalArray<IndexType, NumDimensions> & local_coords) const {
     DASH_LOG_DEBUG_VAR("TilePattern<1>.global()", unit);
     DASH_LOG_DEBUG_VAR("TilePattern<1>.global()", local_coords);
     DASH_LOG_TRACE_VAR("TilePattern<1>.global", _nunits);
@@ -605,7 +605,7 @@ public:
     IndexType glob_index      = (block_index * _blocksize) + elem_phase;
     DASH_LOG_TRACE_VAR("TilePattern<1>.global", block_index);
     DASH_LOG_TRACE_VAR("TilePattern<1>.global >", glob_index);
-    return std::array<IndexType, 1> {{ glob_index }};
+    return LocalArray<IndexType, 1> {{ glob_index }};
   }
 
   /**
@@ -613,8 +613,8 @@ public:
    *
    * \see  DashPatternConcept
    */
-  constexpr std::array<IndexType, NumDimensions> global(
-    const std::array<IndexType, NumDimensions> & l_coords) const {
+  constexpr LocalArray<IndexType, NumDimensions> global(
+    const LocalArray<IndexType, NumDimensions> & l_coords) const {
     return global(_team->myid(), l_coords);
   }
 
@@ -629,7 +629,7 @@ public:
   constexpr IndexType global(
     team_unit_t unit,
     IndexType l_index) const {
-    return global(unit, std::array<IndexType, 1> {{ l_index }})[0];
+    return global(unit, LocalArray<IndexType, 1> {{ l_index }})[0];
   }
 
   /**
@@ -642,7 +642,7 @@ public:
    */
   constexpr IndexType global(
     IndexType l_index) const {
-    return global(_team->myid(), std::array<IndexType, 1> {{ l_index }})[0];
+    return global(_team->myid(), LocalArray<IndexType, 1> {{ l_index }})[0];
   }
 
   /**
@@ -655,7 +655,7 @@ public:
    */
   constexpr IndexType global_index(
     team_unit_t unit,
-    const std::array<IndexType, NumDimensions> & l_coords) const {
+    const LocalArray<IndexType, NumDimensions> & l_coords) const {
     return global(unit, l_coords[0]);
   }
 
@@ -672,7 +672,7 @@ public:
    * \see  DashPatternConcept
    */
   constexpr IndexType at(
-    const std::array<IndexType, NumDimensions> & g_coords) const {
+    const LocalArray<IndexType, NumDimensions> & g_coords) const {
     return local_coords(g_coords)[0];
   }
 
@@ -683,8 +683,8 @@ public:
    *
    * \see  DashPatternConcept
    */
-  IndexType at(
-    const std::array<IndexType, NumDimensions> & g_coords,
+  FN_HOST_ACC IndexType at(
+    const LocalArray<IndexType, NumDimensions> & g_coords,
     const ViewSpec_t & viewspec) const {
     auto vs_coords = g_coords;
     vs_coords[0] += viewspec[0].offset;
@@ -703,7 +703,7 @@ public:
     static_assert(
       sizeof...(values) == NumDimensions-1,
       "Wrong parameter number");
-    return at(std::array<IndexType, NumDimensions> {{
+    return at(LocalArray<IndexType, NumDimensions> {{
                 value, (IndexType)values...
               }} );
   }
@@ -789,7 +789,7 @@ public:
    */
   constexpr index_type block_at(
     /// Global coordinates of element
-    const std::array<index_type, 1> & g_coords) const
+    const LocalArray<index_type, 1> & g_coords) const
   {
     return g_coords[0] / _blocksize;
   }
@@ -801,7 +801,7 @@ public:
    */
   constexpr local_index_t local_block_at(
     /// Global coordinates of element
-    const std::array<index_type, NumDimensions> & g_coords) const {
+    const LocalArray<index_type, NumDimensions> & g_coords) const {
     return local_index_t {
              // unit id:
              static_cast<team_unit_t>(
@@ -820,8 +820,8 @@ public:
     index_type g_block_index) const
   {
     index_type offset = g_block_index * _size;
-    std::array<index_type, NumDimensions> offsets = {{ offset }};
-    std::array<size_type, NumDimensions>  extents = {{ _blocksize }};
+    LocalArray<index_type, NumDimensions> offsets = {{ offset }};
+    LocalArray<size_type, NumDimensions>  extents = {{ _blocksize }};
     return ViewSpec_t(offsets, extents);
   }
 
@@ -836,8 +836,8 @@ public:
     // Local block index to local block coords:
     auto l_elem_index = l_block_index * _blocksize;
     auto g_elem_index = global(l_elem_index);
-    std::array<index_type, NumDimensions> offsets = {{ g_elem_index }};
-    std::array<size_type, NumDimensions>  extents = {{ _blocksize }};
+    LocalArray<index_type, NumDimensions> offsets = {{ g_elem_index }};
+    LocalArray<size_type, NumDimensions>  extents = {{ _blocksize }};
     ViewSpec_t block_vs(offsets, extents);
     DASH_LOG_DEBUG_VAR("TilePattern<1>.local_block >", block_vs);
     return block_vs;
@@ -852,8 +852,8 @@ public:
   {
     DASH_LOG_DEBUG_VAR("TilePattern<1>.local_block_local()", l_block_index);
     index_type offset = l_block_index * _blocksize;
-    std::array<index_type, NumDimensions> offsets = {{ offset }};
-    std::array<size_type, NumDimensions>  extents = {{ _blocksize }};
+    LocalArray<index_type, NumDimensions> offsets = {{ offset }};
+    LocalArray<size_type, NumDimensions>  extents = {{ _blocksize }};
     ViewSpec_t block_vs(offsets, extents);
     DASH_LOG_DEBUG_VAR("TilePattern<1>.local_block_local >", block_vs);
     return block_vs;
@@ -956,7 +956,7 @@ public:
    * \see DashPatternConcept
    */
   constexpr SizeSpec_t sizespec() const {
-    return SizeSpec_t(std::array<SizeType, 1> {{ _size }});
+    return SizeSpec_t(LocalArray<SizeType, 1> {{ _size }});
   }
 
   /**
@@ -964,8 +964,8 @@ public:
    *
    * \see DashPatternConcept
    */
-  constexpr const std::array<SizeType, NumDimensions> extents() const {
-    return std::array<SizeType, 1> {{ _size }};
+  constexpr const LocalArray<SizeType, NumDimensions> extents() const {
+    return LocalArray<SizeType, 1> {{ _size }};
   }
 
   /**
@@ -1003,9 +1003,9 @@ public:
    *
    * \see DashPatternConcept
    */
-  std::array<IndexType, NumDimensions> coords(
+  LocalArray<IndexType, NumDimensions> coords(
     IndexType index) const {
-    return std::array<IndexType, 1> {{ index }};
+    return LocalArray<IndexType, 1> {{ index }};
   }
 
   /**
@@ -1025,7 +1025,7 @@ public:
 private:
   TilePattern(const PatternArguments_t & arguments)
   : _size(arguments.sizespec().size()),
-    _memory_layout(std::array<SizeType, 1> {{ _size }}),
+    _memory_layout(LocalArray<SizeType, 1> {{ _size }}),
     _distspec(arguments.distspec()),
     _team(&arguments.team()),
     _teamspec(arguments.teamspec()),
@@ -1040,7 +1040,7 @@ private:
         _nunits)),
     _local_size(
         initialize_local_extent(_team->myid())),
-    _local_memory_layout(std::array<SizeType, 1> {{ _local_size }}),
+    _local_memory_layout(LocalArray<SizeType, 1> {{ _local_size }}),
     _nlblocks(initialize_num_local_blocks(
         _blocksize,
         _local_size)),
