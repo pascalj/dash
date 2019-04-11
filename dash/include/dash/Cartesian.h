@@ -227,7 +227,7 @@ public:
    * all dimensions.
    */
   constexpr SizeSpec(
-    const ::std::array<SizeType, NumDimensions> & extents)
+    const ::LocalArray<SizeType, NumDimensions> & extents)
   : parent_t(extents) {
   }
 };
@@ -367,7 +367,7 @@ public:
     static_assert(
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
-    std::array<SizeType, NumDimensions> extents =
+    LocalArray<SizeType, NumDimensions> extents =
       {{ arg, (SizeType)(args)... }};
     resize(extents);
   }
@@ -453,7 +453,7 @@ public:
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
     return at<AtArrangement>(
-             LocalArray<IndexType, NumDimensions> {{
+             std::array<IndexType, NumDimensions> {{
                arg, (IndexType)(args) ... }}
            );
   }
@@ -461,7 +461,7 @@ public:
   template<
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
-  IndexType at(
+  FN_HOST IndexType at(
       const std::array<OffsetType, NumDimensions> & point
      ) const {
     return at(LocalArray<OffsetType, NumDimensions>(point));
@@ -508,10 +508,28 @@ public:
   template<
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
-  FN_HOST_ACC IndexType at(
+  FN_HOST IndexType at(
     const std::array<OffsetType, NumDimensions> & point,
     const ViewSpec_t & viewspec) const {
-    std::array<OffsetType, NumDimensions> coords{};
+    return at(LocalArray<OffsetType, NumDimensions>(point), viewspec);
+  }
+
+  /**
+   * Convert the given cartesian point to a linear index, respective to
+   * the offsets specified in the given ViewSpec.
+   *
+   * \param  point     An array containing the coordinates, ordered by
+   *                   dimension (x, y, z, ...)
+   * \param  viewspec  An instance of ViewSpec to apply to the given
+   *                   point before resolving the linear index.
+   */
+  template<
+    MemArrange AtArrangement = Arrangement,
+    typename OffsetType>
+  FN_HOST_ACC IndexType at(
+    const LocalArray<OffsetType, NumDimensions> & point,
+    const ViewSpec_t & viewspec) const {
+    LocalArray<OffsetType, NumDimensions> coords{};
     for (auto d = 0; d < NumDimensions; ++d) {
       coords[d] = point[d] + viewspec.offset(d);
     }
@@ -552,11 +570,11 @@ public:
    * Inverse of \c at(...).
    */
   template<MemArrange CoordArrangement = Arrangement>
-  std::array<IndexType, NumDimensions> coords(
+  LocalArray<IndexType, NumDimensions> coords(
     IndexType          index,
     const ViewSpec_t & viewspec) const
   {
-    std::array<IndexType, NumDimensions> pos{};
+    LocalArray<IndexType, NumDimensions> pos{};
     extents_type offset;
     if (CoordArrangement == ROW_MAJOR)
     {
@@ -712,7 +730,7 @@ public:
     static_assert(
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
-    std::array<SizeType, NumDimensions> extents =
+    LocalArray<SizeType, NumDimensions> extents =
       {{ arg, (SizeType)(args)... }};
     resize(extents);
   }
@@ -721,7 +739,7 @@ public:
    * Change the extent of the cartesian space in every dimension.
    */
   template<typename SizeType_>
-  void resize(std::array<SizeType_, NumDimensions> extents) {
+  void resize(LocalArray<SizeType_, NumDimensions> extents) {
     if (!_distspec.is_tiled()) {
       parent_t::resize(extents);
     }
@@ -744,7 +762,7 @@ public:
       sizeof...(Args) == NumDimensions-1,
       "Invalid number of arguments");
     return at<AtArrangement>(
-             std::array<IndexType, NumDimensions> {
+             LocalArray<IndexType, NumDimensions> {
                arg, (IndexType)(args) ... }
            );
   }
@@ -759,7 +777,7 @@ public:
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
   IndexType at(
-    const std::array<OffsetType, NumDimensions> & point) const {
+    const LocalArray<OffsetType, NumDimensions> & point) const {
     if (!_distspec.is_tiled()) {
       // Default case, no tiles
       return parent_t::at(point);
@@ -781,9 +799,9 @@ public:
     MemArrange AtArrangement = Arrangement,
     typename OffsetType>
   IndexType at(
-    const std::array<OffsetType, NumDimensions> & point,
+    const LocalArray<OffsetType, NumDimensions> & point,
     const ViewSpec_t & viewspec) const {
-    std::array<OffsetType, NumDimensions> coords;
+    LocalArray<OffsetType, NumDimensions> coords;
     for (auto d = 0; d < NumDimensions; ++d) {
       coords[d] = point[d] + viewspec[d].offset;
     }
@@ -800,7 +818,7 @@ public:
    * Inverse of \c at(...).
    */
   template<MemArrange CoordArrangement = Arrangement>
-  std::array<IndexType, NumDimensions> coords(IndexType index) const {
+  LocalArray<IndexType, NumDimensions> coords(IndexType index) const {
     if (!_distspec.is_tiled()) {
       // Default case, no tiles
       return parent_t::coords(index);

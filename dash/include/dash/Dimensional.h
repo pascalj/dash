@@ -110,7 +110,7 @@ private:
   typedef Dimensional<ElementType, NumDimensions> self_t;
 
 protected:
-  std::array<ElementType, NumDimensions> _values;
+  LocalArray<ElementType, NumDimensions> _values;
 
 public:
   /**
@@ -128,7 +128,7 @@ public:
   /**
    * Constructor, expects array containing values for every dimension.
    */
-  constexpr Dimensional(std::array<ElementType, NumDimensions> values)
+  constexpr Dimensional(LocalArray<ElementType, NumDimensions> values)
     : _values(std::move(values))
   {
   }
@@ -140,7 +140,7 @@ public:
    * Return value with all dimensions as array of \c NumDimensions
    * elements.
    */
-  constexpr const std::array<ElementType, NumDimensions> & values() const {
+  constexpr const LocalArray<ElementType, NumDimensions> & values() const {
     return _values;
   }
 
@@ -278,7 +278,7 @@ public:
    *   DistributionSpec<3> ds(NONE, BLOCKED, CYCLIC);
    * \endcode
    */
-  DistributionSpec(const std::array<Distribution, NumDimensions>& values)
+  DistributionSpec(const LocalArray<Distribution, NumDimensions>& values)
     : Dimensional<Distribution, NumDimensions>::Dimensional(values)
   {
     DASH_LOG_TRACE_VAR("DistributionSpec(distribution[])", values);
@@ -361,9 +361,9 @@ template<
   typename IndexType = dash::default_index_t>
 struct ViewRegion {
   // Region origin coordinates.
-  std::array<IndexType, NumDimensions> begin;
+  LocalArray<IndexType, NumDimensions> begin;
   // Region end coordinates.
-  std::array<IndexType, NumDimensions> end;
+  LocalArray<IndexType, NumDimensions> end;
 };
 
 template<
@@ -474,7 +474,7 @@ public:
    * dimensions.
    */
   ViewSpec(
-    const std::array<SizeType, NumDimensions> & extents)
+    const LocalArray<SizeType, NumDimensions> & extents)
   : _size(1),
     _rank(NumDimensions),
     _extents(extents)
@@ -489,8 +489,8 @@ public:
    * Constructor, initialize with given extents and offsets.
    */
   ViewSpec(
-    const std::array<IndexType, NumDimensions> & offsets,
-    const std::array<SizeType, NumDimensions>  & extents)
+    const LocalArray<IndexType, NumDimensions> & offsets,
+    const LocalArray<SizeType, NumDimensions>  & extents)
   : _size(1),
     _rank(NumDimensions),
     _extents(extents),
@@ -548,7 +548,7 @@ public:
     static_assert(
       sizeof...(Args) == (NumDimensions-1),
       "Invalid number of arguments");
-    std::array<SizeType, NumDimensions> extents =
+    LocalArray<SizeType, NumDimensions> extents =
       { arg, (SizeType)(args)... };
     resize(extents);
   }
@@ -556,7 +556,7 @@ public:
   /**
    * Change the view specification's extent and offset in every dimension.
    */
-  void resize(const std::array<ViewPair_t, NumDimensions> & view)
+  void resize(const LocalArray<ViewPair_t, NumDimensions> & view)
   {
     _rank = NumDimensions;
     for (dim_t i = 0; i < NumDimensions; i++) {
@@ -570,7 +570,7 @@ public:
    * Change the view specification's extent in every dimension.
    */
   template<typename SizeType_>
-  void resize(const std::array<SizeType_, NumDimensions> & extents)
+  void resize(const LocalArray<SizeType_, NumDimensions> & extents)
   {
     _rank = NumDimensions;
     for (dim_t i = 0; i < NumDimensions; i++) {
@@ -622,8 +622,8 @@ public:
   ViewSpec<NumDimensions-1, IndexType>
   slice(dim_t dimension)
   {
-    std::array<SizeType, NumDimensions-1>  slice_extents;
-    std::array<IndexType, NumDimensions-1> slice_offsets;
+    LocalArray<SizeType, NumDimensions-1>  slice_extents;
+    LocalArray<IndexType, NumDimensions-1> slice_offsets;
     for (dim_t d = dimension; d < _rank-1; d++) {
       slice_offsets[d] = _offsets[d+1];
       slice_extents[d] = _extents[d+1];
