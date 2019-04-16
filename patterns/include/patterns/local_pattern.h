@@ -78,7 +78,7 @@ public:
     }
   }
 
-  auto block_for_entity(Entity entity, size_t index) const
+  FN_HOST_ACC auto block_for_entity(Entity entity, size_t index) const
   {
     auto block_index =
         (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
@@ -87,7 +87,7 @@ public:
     return this->local_block(block_index);
   }
 
-  auto block_local_for_entity(Entity entity, size_t index) const
+  FN_HOST_ACC auto block_local_for_entity(Entity entity, size_t index) const
   {
     auto block_index =
         (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
@@ -96,12 +96,12 @@ public:
     return this->local_block_local(block_index);
   }
 
-  block_range blocks_local_for_entity(Entity &entity)
+  FN_HOST_ACC block_range blocks_local_for_entity(Entity &entity)
   {
     return block_range{this, &entity};
   }
 
-  size_t nblocks_for_entity(Entity entity) const
+  FN_HOST_ACC size_t nblocks_for_entity(Entity entity) const
   {
     auto const entity_blocks = _local_blocks / entity.total();
     auto const add =

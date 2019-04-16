@@ -847,7 +847,7 @@ public:
    * View spec (offset and extents) of block at local linear block index in
    * local cartesian element space.
    */
-  ViewSpec_t local_block_local(
+  FN_HOST_ACC ViewSpec_t local_block_local(
     index_type l_block_index) const
   {
     DASH_LOG_DEBUG_VAR("TilePattern<1>.local_block_local()", l_block_index);

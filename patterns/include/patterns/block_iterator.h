@@ -26,26 +26,26 @@ public:
   {
   }
 
-  EntityBlockIterator &operator++()
+  FN_HOST_ACC EntityBlockIterator &operator++()
   {
     _index++;
     return *this;
   }
 
-  EntityBlockIterator operator++(int)
+  FN_HOST_ACC EntityBlockIterator operator++(int)
   {
     EntityBlockIterator res(*this);
     ++(*this);
     return res;
   }
 
-  reference operator*()
+  FN_HOST_ACC reference operator*()
   {
     _blockspec = _pattern->block_local_for_entity(*_entity, _index);
     return _blockspec;
   }
 
-  bool operator!=(EntityBlockIterator &other) {
+  FN_HOST_ACC bool operator!=(EntityBlockIterator &other) {
     DASH_LOG_TRACE("BlockIterator.equal", _index, other._index);
     return _index != other._index;
   }
