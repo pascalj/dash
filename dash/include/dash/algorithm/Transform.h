@@ -13,7 +13,6 @@
 #include <dash/util/Trace.h>
 
 #include <dash/dart/if/dart_communication.h>
-#include <experimental/execution>
 #include <dash/Execution.h>
 
 #ifdef DASH_ENABLE_OPENMP
@@ -473,13 +472,15 @@ GlobOutputIt transform(
     // Output range is rhs input range: C += A
     // Input is (in_a_first, in_a_last).
   } else {
-    using result_t = typename dash::executor_result<decltype(policy.executor())>::type;
+    using pattern_t = GlobInputIt::pattern_type;
+    using shape_t = pattern_t::viewspec_type;
+
     policy.executor().bulk_twoway_execute(
-        [&](size_t idx, executor_result_t<decltype(policy.executor())>::type &res_vec, void*) {
-          res_vec[idx] = unary_op(first[idx]);
+        [&](size_t idx, value_type &res, value_type *exe_first) {
+          res = unary_op(exe_first);
         },
         first.pattern(),           // "shape"
-        [&]() -> std::vector<value_type>& { return result; },  // result factory, handed to f
+        [=]() -> decltype(out_first) { return out_first; },  // result factory
         [=] { return nullptr; });  // shared state, unused here
     /* first = in_range.data(); */
     /* last = first + in_range.size(); */

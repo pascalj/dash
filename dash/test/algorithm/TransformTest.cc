@@ -7,8 +7,6 @@
 #include <dash/Array.h>
 #include <dash/Matrix.h>
 
-#include <experimental/execution>
-
 #include <array>
 
 
