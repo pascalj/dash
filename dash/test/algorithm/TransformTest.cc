@@ -8,6 +8,7 @@
 #include <dash/Matrix.h>
 
 #include <array>
+#include <tuple>
 
 
 TEST_F(TransformTest, ArrayLocalPlusLocal)
@@ -232,11 +233,13 @@ struct simple_executor {
       Function f, Shape pattern, ResultFactory result, SharedFactory)
   {
     auto local_size = pattern.local_size();
+    // for block in local_blocs
     for (int i = 0; i < local_size; i++) {
-      f(i, result(), nullptr);
+      f(i, result()[i], nullptr);
     }
   }
 };
+
 struct policy {
   simple_executor executor()
   {
@@ -250,13 +253,14 @@ struct is_execution_policy<policy>
   : public std::integral_constant<bool, true> {
 };
 }
+
 TEST_F(TransformTest, SimpleExecutorUnary)
 {
   // Local input and output ranges, does not require communication.
   // Simple case: array_in's and array_out's elements map to the
   // same units.
   const size_t num_elem_local = 5;
-  size_t num_elem_total       = dash::size() * num_elem_local;
+  const size_t num_elem_total = dash::size() * num_elem_local;
   // Identical distribution in all ranges:
   dash::Array<int> array_in(num_elem_total, dash::BLOCKED);
   dash::Array<int> array_dest(num_elem_total, dash::BLOCKED);

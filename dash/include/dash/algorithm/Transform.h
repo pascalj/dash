@@ -439,7 +439,7 @@ GlobOutputIt transform(
  * Implementation for execution policies with a unary operation.
  *
  * This implementation assumes nothing about the allocation of first and
- * out_first, but uses optimizationsoptimizes when first == out_first.
+ * out_first, but optimizes when first == out_first.
  *
  * When the policy provides an executor, the bulk_twoway_execute function
  * is called with global *iterators* as input. The executor has to handle
@@ -472,12 +472,12 @@ GlobOutputIt transform(
     // Output range is rhs input range: C += A
     // Input is (in_a_first, in_a_last).
   } else {
-    using pattern_t = GlobInputIt::pattern_type;
-    using shape_t = pattern_t::viewspec_type;
+    using pattern_t = typename GlobInputIt::pattern_type;
+    using shape_t = typename pattern_t::viewspec_type;
 
     policy.executor().bulk_twoway_execute(
-        [&](size_t idx, value_type &res, value_type *exe_first) {
-          res = unary_op(exe_first);
+        [&](size_t idx, value_type *res, void*) {
+          res[idx] = unary_op(exe_first[idx]);
         },
         first.pattern(),           // "shape"
         [=]() -> decltype(out_first) { return out_first; },  // result factory
