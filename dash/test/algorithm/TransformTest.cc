@@ -230,12 +230,16 @@ struct simple_executor {
       class ResultFactory,
       class SharedFactory>
   void bulk_twoway_execute(
-      Function f, Shape pattern, ResultFactory result, SharedFactory)
+      Function f, Shape pattern, ResultFactory result, SharedFactory sf)
   {
     auto local_size = pattern.local_size();
+    auto first = sf().first;
+
     // for block in local_blocs
+    auto glob_out = result();
+
     for (int i = 0; i < local_size; i++) {
-      f(i, result()[i], nullptr);
+      f(i, glob_out.local(), first.local());
     }
   }
 };
@@ -243,7 +247,7 @@ struct simple_executor {
 struct policy {
   simple_executor executor()
   {
-    return simple_executor();
+    return {};
   }
 };
 
@@ -252,7 +256,7 @@ template <>
 struct is_execution_policy<policy>
   : public std::integral_constant<bool, true> {
 };
-}
+}  // namespace dash
 
 TEST_F(TransformTest, SimpleExecutorUnary)
 {
@@ -268,7 +272,6 @@ TEST_F(TransformTest, SimpleExecutorUnary)
   // Fill ranges with initial values:
   for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
     array_in.local[l_idx]   = l_idx;
-    array_dest.local[l_idx] = 45;
   }
 
   dash::barrier();
@@ -278,14 +281,14 @@ TEST_F(TransformTest, SimpleExecutorUnary)
       policy(),
       array_in.begin(),
       array_in.end(),
-      array_dest.begin(),
-      [](int elem) { return elem + 23; });
+      array_in.begin(),
+      [](int elem) {
+        return elem + 23;
+      });
 
   dash::barrier();
 
   for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
-    EXPECT_EQ_U(array_in.local[l_idx], l_idx);
-    EXPECT_EQ_U(array_dest.local[l_idx], l_idx + 23);
+    EXPECT_EQ_U(l_idx + 23, array_in.local[l_idx]);
   }
-
 }

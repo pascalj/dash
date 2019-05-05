@@ -469,6 +469,9 @@ GlobOutputIt transform(
   using value_type = typename dash::iterator_traits<GlobInputIt>::value_type;
   std::vector<value_type> result(std::distance(first, last));
   if (first  != out_first) {
+    DASH_THROW(
+      dash::exception::NotImplemented,
+      "dash::transform is only implemented for out = op(in,out)");
     // Output range is rhs input range: C += A
     // Input is (in_a_first, in_a_last).
   } else {
@@ -476,19 +479,15 @@ GlobOutputIt transform(
     using shape_t = typename pattern_t::viewspec_type;
 
     policy.executor().bulk_twoway_execute(
-        [&](size_t idx, value_type *res, void*) {
-          res[idx] = unary_op(exe_first[idx]);
+        // note: we can only capture by copy here
+       [=](size_t idx, value_type *res, value_type *block_first) {
+       std::cout << "elem: " << idx;
+          res[idx] = unary_op(block_first[idx]);
         },
         first.pattern(),           // "shape"
-        [=]() -> decltype(out_first) { return out_first; },  // result factory
-        [=] { return nullptr; });  // shared state, unused here
-    /* first = in_range.data(); */
-    /* last = first + in_range.size(); */
+        [=] { return out_first; },  // result factory
+        [=] { return std::make_pair(first, last); });  // shared state, unused here
   }
-
-  for (int i = 0; i < std::distance(first,last); i++) {
-    out_first[i] = result[i];
-  };
 
   dash::util::Trace trace("transform");
 
