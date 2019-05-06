@@ -5,6 +5,7 @@
 #include <dash/algorithm/Transform.h>
 
 #include <dash/Array.h>
+#include <dash/GlobPtr.h>
 #include <dash/Matrix.h>
 
 #include <array>
@@ -232,14 +233,18 @@ struct simple_executor {
   void bulk_twoway_execute(
       Function f, Shape pattern, ResultFactory result, SharedFactory sf)
   {
-    auto local_size = pattern.local_size();
-    auto first = sf().first;
+    auto global_first = sf().first;
+    auto glob_out     = result();
+    using g_ptr       = typename decltype(global_first)::pointer;
 
-    // for block in local_blocs
-    auto glob_out = result();
+    auto local_size   = pattern.local_size();
+    auto myid         = dash::Team::All().myid();
+    auto local_first =
+        dash::local_begin(static_cast<g_ptr>(global_first), myid);
+    auto local_out = dash::local_begin(static_cast<g_ptr>(glob_out), myid);
 
     for (int i = 0; i < local_size; i++) {
-      f(i, glob_out.local(), first.local());
+      f(i, local_out, local_first);
     }
   }
 };
@@ -267,12 +272,10 @@ TEST_F(TransformTest, SimpleExecutorUnary)
   const size_t num_elem_total = dash::size() * num_elem_local;
   // Identical distribution in all ranges:
   dash::Array<int> array_in(num_elem_total, dash::BLOCKED);
-  dash::Array<int> array_dest(num_elem_total, dash::BLOCKED);
 
   // Fill ranges with initial values:
-  for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
-    array_in.local[l_idx]   = l_idx;
-  }
+  std::fill(
+      array_in.lbegin(), array_in.lend(), dash::myid());
 
   dash::barrier();
 
@@ -289,6 +292,6 @@ TEST_F(TransformTest, SimpleExecutorUnary)
   dash::barrier();
 
   for (size_t l_idx = 0; l_idx < num_elem_local; ++l_idx) {
-    EXPECT_EQ_U(l_idx + 23, array_in.local[l_idx]);
+    EXPECT_EQ_U(dash::myid() + 23, array_in.local[l_idx]);
   }
 }

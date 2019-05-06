@@ -480,13 +480,14 @@ GlobOutputIt transform(
 
     policy.executor().bulk_twoway_execute(
         // note: we can only capture by copy here
-       [=](size_t idx, value_type *res, value_type *block_first) {
-       std::cout << "elem: " << idx;
+        [=](size_t idx, value_type* res, value_type* block_first) {
           res[idx] = unary_op(block_first[idx]);
         },
-        first.pattern(),           // "shape"
+        first.pattern(),            // "shape"
         [=] { return out_first; },  // result factory
-        [=] { return std::make_pair(first, last); });  // shared state, unused here
+        [=] {
+          return std::make_pair(first, last);
+        });  // shared state, unused here
   }
 
   dash::util::Trace trace("transform");
