@@ -483,7 +483,7 @@ GlobOutputIt transform(
         [=](size_t idx, value_type* res, value_type* block_first) {
           res[idx] = unary_op(block_first[idx]);
         },
-        first.pattern(),            // "shape"
+        first,            // "shape"
         [=] { return out_first; },  // result factory
         [=] {
           return std::make_pair(first, last);
@@ -569,17 +569,16 @@ template <
     class InputIt,
     class GlobOutputIt,
     class UnaryOperation>
-typename std::
-    enable_if<is_execution_policy<ExecutionPolicy>::value, GlobOutputIt>::type
-    transform(
-        ExecutionPolicy&& policy,
-        InputIt           in_a_first,
-        InputIt           in_a_last,
-        GlobOutputIt      out_first,
-        UnaryOperation    unary_op)
+typename std::enable_if<
+    is_execution_policy<typename std::decay<ExecutionPolicy>::type>::value,
+    GlobOutputIt>::type
+transform(
+    ExecutionPolicy&& policy,
+    InputIt           in_a_first,
+    InputIt           in_a_last,
+    GlobOutputIt      out_first,
+    UnaryOperation    unary_op)
 {
-  using InputIt_traits_t    = dash::iterator_traits<InputIt>;
-
   return internal::transform(
       policy,
       in_a_first,
