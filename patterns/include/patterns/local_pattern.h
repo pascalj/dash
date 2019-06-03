@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 #include "block_range.h"
 
@@ -71,14 +72,10 @@ public:
   BalancedLocalPattern() = delete;
 
   BalancedLocalPattern(Base base)
-    : Base(base)
-  {
-    for (auto blockcount : this->local_blockspec().extents()) {
-      _local_blocks *= blockcount;
-    }
-  }
+    : Base(base), _local_blocks(base.local_blockspec().size())
+  { }
 
-  FN_HOST_ACC auto block_for_entity(Entity entity, size_t index) const
+  auto block_for_entity(Entity entity, size_t index) const
   {
     auto block_index =
         (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
@@ -87,7 +84,7 @@ public:
     return this->local_block(block_index);
   }
 
-  FN_HOST_ACC auto block_local_for_entity(Entity entity, size_t index) const
+  auto block_local_for_entity(Entity entity, size_t index) const
   {
     auto block_index =
         (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
@@ -106,7 +103,7 @@ public:
     return vec;
   }
 
-  FN_HOST_ACC size_t nblocks_for_entity(Entity entity) const
+  size_t nblocks_for_entity(Entity entity) const
   {
     auto const entity_blocks = _local_blocks / entity.total();
     auto const add =

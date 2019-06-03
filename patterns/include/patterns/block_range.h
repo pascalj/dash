@@ -23,12 +23,12 @@ public:
   {
   }
 
-  FN_HOST_ACC EntityBlockIterator<PatternT> begin()
+  EntityBlockIterator<PatternT> begin()
   {
     return iterator{_pattern, _entity};
   }
 
-  FN_HOST_ACC EntityBlockIterator<PatternT> end()
+  EntityBlockIterator<PatternT> end()
   {
     return iterator{
         _pattern, _entity, _pattern->nblocks_for_entity(*_entity)};

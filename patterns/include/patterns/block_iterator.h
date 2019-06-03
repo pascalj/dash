@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <dash/Types.h>
 
 namespace patterns {
 template <typename PatternT>
