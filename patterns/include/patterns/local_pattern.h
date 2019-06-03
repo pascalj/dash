@@ -41,13 +41,13 @@ public:
     return entity_blocks + add;
   }
 
-  size_t lbegin(Entity entity)
+  size_t lbegin(Entity entity) const
   {
     auto first_block = this->local_block_local(entity.index());
     return this->local_at(first_block.offsets());
   }
 
-  size_t lend(Entity entity)
+  size_t lend(Entity entity) const
   {
     auto last_block = local_block_local(
         _local_blocks - (_local_blocks % entity.total()) + entity.index());
@@ -96,9 +96,14 @@ public:
     return this->local_block_local(block_index);
   }
 
-  FN_HOST_ACC block_range blocks_local_for_entity(Entity &entity)
+  std::vector<block_type> blocks_local_for_entity(const Entity &entity) const
   {
-    return block_range{this, &entity};
+    const auto entity_blocks = nblocks_for_entity(entity);
+    std::vector<block_type> vec{entity_blocks};
+    for(std::size_t i = 0; i < entity_blocks; i++) {
+      vec.push_back(block_local_for_entity(entity, i));
+    }
+    return vec;
   }
 
   FN_HOST_ACC size_t nblocks_for_entity(Entity entity) const
@@ -109,7 +114,7 @@ public:
     return entity_blocks + add;
   }
 
-  size_t lbegin(Entity entity)
+  size_t entity_lbegin(Entity entity) const
   {
     auto first_blockspec = this->block_local_for_entity(entity, 0);
     DASH_LOG_TRACE(
@@ -117,7 +122,7 @@ public:
     return this->local_at(first_blockspec.offsets());
   }
 
-  size_t lend(Entity entity)
+  size_t entity_lend(Entity entity) const
   {
     auto total_local_blocks = nblocks_for_entity(entity);
     auto last_blockspec =

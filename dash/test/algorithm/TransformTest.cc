@@ -231,13 +231,13 @@ struct simple_executor {
       class ResultFactory,
       class SharedFactory>
   void bulk_twoway_execute(
-      Function f, Shape pattern, ResultFactory result, SharedFactory sf)
+      Function f, Shape first, ResultFactory result, SharedFactory sf)
   {
     auto global_first = sf().first;
     auto glob_out     = result();
     using g_ptr       = typename decltype(global_first)::pointer;
 
-    auto local_size   = pattern.local_size();
+    auto local_size   = first.pattern().local_size();
     auto myid         = dash::Team::All().myid();
     auto local_first =
         dash::local_begin(static_cast<g_ptr>(global_first), myid);

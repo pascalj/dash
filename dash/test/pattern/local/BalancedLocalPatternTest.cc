@@ -70,7 +70,7 @@ TEST_F(BalancedLocalPatternTest, TwoDimensional)
     const auto nblocks = pattern.nblocks_for_entity(e);
     if(nblocks > 0) {
       const auto expected_lbegin = i * block_height * y;
-      EXPECT_EQ_U(pattern.lbegin(e), expected_lbegin);
+      EXPECT_EQ_U(pattern.entity_lbegin(e), expected_lbegin);
     }
 
     sum += nblocks;
