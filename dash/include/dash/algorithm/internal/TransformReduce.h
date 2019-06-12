@@ -41,8 +41,8 @@ T transform_reduce(
     UnaryOperation  unary_op)
 {
   auto local_range = dash::local_range(in_first, in_last);
-  auto lbegin      = local_range.begin();
-  auto lend        = local_range.end();
+  auto lbegin      = local_range.begin;
+  auto lend        = local_range.end;
 
   auto local_result = detail::local_transform_reduce_simple(
       lbegin, lend, init, binary_op, unary_op);
@@ -77,8 +77,8 @@ T transform_reduce(
     team_unit_t     root)
 {
   auto local_range = dash::local_range(in_first, in_last);
-  auto lbegin      = local_range.begin();
-  auto lend        = local_range.end();
+  auto lbegin      = local_range.begin;
+  auto lend        = local_range.end;
 
   auto local_result = detail::local_transform_reduce_simple(
       lbegin, lend, init, binary_op, unary_op);
