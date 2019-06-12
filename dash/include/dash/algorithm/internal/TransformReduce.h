@@ -1,6 +1,7 @@
 #include <dash/algorithm/LocalRange.h>
 #include <dash/algorithm/Reduce.h>
 #include <dash/iterator/IteratorTraits.h>
+#include <dash/Execution.h>
 
 namespace dash {
 
@@ -40,8 +41,8 @@ T transform_reduce(
     UnaryOperation  unary_op)
 {
   auto local_range = dash::local_range(in_first, in_last);
-  auto lbegin      = local_range.begin;
-  auto lend        = local_range.end;
+  auto lbegin      = local_range.begin();
+  auto lend        = local_range.end();
 
   auto local_result = detail::local_transform_reduce_simple(
       lbegin, lend, init, binary_op, unary_op);
@@ -76,8 +77,8 @@ T transform_reduce(
     team_unit_t     root)
 {
   auto local_range = dash::local_range(in_first, in_last);
-  auto lbegin      = local_range.begin;
-  auto lend        = local_range.end;
+  auto lbegin      = local_range.begin();
+  auto lend        = local_range.end();
 
   auto local_result = detail::local_transform_reduce_simple(
       lbegin, lend, init, binary_op, unary_op);
@@ -92,4 +93,48 @@ T transform_reduce(
       in_first.team(),
       &root);
 }
+
+template <
+    class ExecutionPolicy,
+    class InputIt,
+    class T,
+    class BinaryOperation,
+    class UnaryOperation>
+typename std::enable_if<
+    is_execution_policy<typename std::decay<ExecutionPolicy>::type>::value,
+    T>::type
+transform_reduce(
+    ExecutionPolicy&& policy,
+    InputIt           in_first,
+    InputIt           in_last,
+    T                 init,
+    BinaryOperation   binary_op,
+    UnaryOperation    unary_op)
+{
+  using value_type = typename std::iterator_traits<InputIt>::value_type;
+  std::vector<T> results;
+
+  policy.executor().bulk_twoway_execute(
+      // note: we can only capture by copy here
+      [=](size_t      block_index,
+          size_t      element_index,
+          T*          res,
+          value_type* block_first) {
+        res[block_index] =
+            binary_op(res[block_index], unary_op(block_first[element_index]));
+      },
+      in_first,                 // "shape"
+      [&] { return results; },  // result factory
+      [=] {
+        return std::make_pair(in_first, in_last);
+      });  // shared state, unused here
+
+  // Use dash's reduce for the non-local parts
+  return reduce(
+      results.begin(),
+      results.end(),
+      init,
+      binary_op);
+}
+
 }  // namespace dash

@@ -213,8 +213,8 @@ GlobOutputIt transform_local(
                   "distributions of input- and output ranges differ");
   // Local subrange of input range a:
   auto local_range_a   = dash::local_range(in_a_first, in_a_last);
-  ValueType * lbegin_a = local_range_a.begin;
-  ValueType * lend_a   = local_range_a.end;
+  ValueType * lbegin_a = local_range_a.begin();
+  ValueType * lend_a   = local_range_a.end();
   if (lbegin_a == lend_a) {
     // Local input range is empty, return initial output iterator to indicate
     // that no values have been transformed:
@@ -338,15 +338,15 @@ GlobOutputIt transform(
     "dash::transform: Different teams in input- and output ranges");
   // Resolve local range from global range:
   auto l_index_range_in_a       = local_index_range(in_a_first, in_a_last);
-  DASH_LOG_TRACE_VAR("dash::transform", l_index_range_in_a.begin);
-  DASH_LOG_TRACE_VAR("dash::transform", l_index_range_in_a.end);
+  DASH_LOG_TRACE_VAR("dash::transform", l_index_range_in_a.begin());
+  DASH_LOG_TRACE_VAR("dash::transform", l_index_range_in_a.end());
   // Local range to global offset:
   auto global_offset            = pattern_in_a.global(
-                                    l_index_range_in_a.begin);
+                                    l_index_range_in_a.begin());
   DASH_LOG_TRACE_VAR("dash::transform", global_offset);
   // Number of elements in local range:
-  size_t num_local_elements     = l_index_range_in_a.end -
-                                  l_index_range_in_a.begin;
+  size_t num_local_elements     = l_index_range_in_a.end() -
+                                  l_index_range_in_a.begin();
   DASH_LOG_TRACE_VAR("dash::transform", num_local_elements);
   // Global iterator to dart_gptr_t:
   dart_gptr_t dest_gptr         = (out_first + global_offset).dart_gptr();
@@ -479,15 +479,25 @@ GlobOutputIt transform(
     // Input is (in_a_first, in_a_last).
   } else {
     using pattern_t = typename GlobInputIt::pattern_type;
-    using shape_t = typename pattern_t::viewspec_type;
+    using shape_t   = typename pattern_t::viewspec_type;
+
+    using result_type = typename GlobOutputIt::value_type;
+    auto nelems = dash::distance(first, last);
+    auto out_end = std::next(out_first, nelems);
+    auto local_range =
+        dash::local_range(out_first, out_end);
 
     policy.executor().bulk_twoway_execute(
-        // note: we can only capture by copy here
-        [=](size_t idx, value_type* res, value_type* block_first) {
-          res[idx] = unary_op(block_first[idx]);
+        // We can only capture by copy here, since this lambda will be copied
+        // to other memory spaces.
+        [=](const size_t block_index,
+            const size_t element_index,
+            value_type*  res,
+            value_type*  block_first) {
+          res[element_index] = unary_op(block_first[element_index]);
         },
-        first,            // "shape"
-        [=] { return out_first; },  // result factory
+        first,                        // "shape"
+        [&] { return local_range; },  // result factory
         [=] {
           return std::make_pair(first, last);
         });  // shared state, unused here
