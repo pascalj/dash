@@ -90,7 +90,7 @@ public:
         (std::ceil(static_cast<float>(_local_blocks) / entity.total()) *
          entity.index()) +
         index;
-    return this->local_block_local(block_index);
+    return this->local_block(block_index);
   }
 
   std::vector<block_type> blocks_local_for_entity(const Entity &entity) const

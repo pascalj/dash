@@ -234,17 +234,16 @@ struct simple_executor {
       Function f, Shape first, ResultFactory result, SharedFactory sf)
   {
     auto global_first = sf().first;
-    auto glob_out     = result();
+    auto local_out = result();
     using g_ptr       = typename decltype(global_first)::pointer;
 
     auto local_size   = first.pattern().local_size();
     auto myid         = dash::Team::All().myid();
     auto local_first =
         dash::local_begin(static_cast<g_ptr>(global_first), myid);
-    auto local_out = dash::local_begin(static_cast<g_ptr>(glob_out), myid);
 
     for (int i = 0; i < local_size; i++) {
-      f(i, local_out, local_first);
+      f(0, i, local_out.begin, local_first);
     }
   }
 };

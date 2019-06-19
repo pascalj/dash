@@ -83,6 +83,8 @@ T transform_reduce(
   auto local_result = detail::local_transform_reduce_simple(
       lbegin, lend, init, binary_op, unary_op);
 
+  in_first.pattern().team().barrier();
+
   // Use dash's reduce for the non-local parts
   return reduce(
       std::addressof(local_result),
@@ -112,7 +114,7 @@ transform_reduce(
     UnaryOperation    unary_op)
 {
   using value_type = typename std::iterator_traits<InputIt>::value_type;
-  std::vector<T> results;
+  std::vector<T> results(1, init);
 
   policy.executor().bulk_twoway_execute(
       // note: we can only capture by copy here
@@ -123,18 +125,16 @@ transform_reduce(
         res[block_index] =
             binary_op(res[block_index], unary_op(block_first[element_index]));
       },
-      in_first,                 // "shape"
-      [&] { return results; },  // result factory
+      in_first,                                      // "shape"
+      [&]() -> std::vector<T>& { return results; },  // result factory
       [=] {
         return std::make_pair(in_first, in_last);
       });  // shared state, unused here
 
+  in_first.pattern().team().barrier();
+
   // Use dash's reduce for the non-local parts
-  return reduce(
-      results.begin(),
-      results.end(),
-      init,
-      binary_op);
+  return reduce(results.begin(), results.end(), init, binary_op);
 }
 
 }  // namespace dash

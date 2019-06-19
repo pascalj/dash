@@ -497,7 +497,7 @@ GlobOutputIt transform(
           res[element_index] = unary_op(block_first[element_index]);
         },
         first,                        // "shape"
-        [&] { return local_range; },  // result factory
+        [&]() -> decltype(local_range)& { return local_range; },  // result factory
         [=] {
           return std::make_pair(first, last);
         });  // shared state, unused here

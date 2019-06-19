@@ -29,6 +29,8 @@ sub(
 
 template<typename ElementType>
 struct LocalRange {
+  using value_type = ElementType;
+
   ElementType * begin;
   ElementType * end;
 };
