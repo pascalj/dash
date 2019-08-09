@@ -114,7 +114,11 @@ transform_reduce(
     UnaryOperation    unary_op)
 {
   using value_type = typename std::iterator_traits<InputIt>::value_type;
-  std::vector<T> results(1, init);
+
+  auto& executor = policy.executor();
+  // This is not standard, but necessary to reserve the right amount of resources
+  size_t         concurrency = executor.concurrency();
+  std::vector<T> results(concurrency, init);
 
   policy.executor().bulk_twoway_execute(
       // note: we can only capture by copy here

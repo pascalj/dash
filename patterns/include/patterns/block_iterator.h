@@ -47,7 +47,6 @@ public:
   }
 
   FN_HOST_ACC bool operator!=(EntityBlockIterator &other) {
-    DASH_LOG_TRACE("BlockIterator.equal", _index, other._index);
     return _index != other._index;
   }
 
