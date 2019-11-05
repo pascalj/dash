@@ -9,6 +9,8 @@
 
 #include <array>
 
+#include <dash/Mephisto.h>
+
 
 TEST_F(TransformTest, ArrayLocalPlusLocal)
 {
@@ -220,4 +222,14 @@ TEST_F(TransformTest, MatrixGlobalPlusGlobalBlocking)
   std::array<index_t, 2> first_l_block_a_offsets = first_l_block_a.offsets();
   EXPECT_EQ_U(first_l_block_a_begin,
               first_l_block_a_offsets);
+}
+
+TEST_F(TransformTest, MephistoBasicTest)
+{
+  // Block-wise addition (a += b) of two matrices
+  using value_t = int64_t;
+
+  dash::Array<value_t> arr(100 * dash::size());
+
+  dash::AlpakaExecutor<dash::CpuSerialEntity<1>> executor;
 }

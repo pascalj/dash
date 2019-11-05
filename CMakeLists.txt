@@ -98,6 +98,7 @@ endif()
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/CMakeEnvCheck.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/Mephisto.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/InstallFiles.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/FileSystem.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/Doxygen.cmake)

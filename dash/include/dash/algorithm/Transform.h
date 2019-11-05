@@ -13,6 +13,12 @@
 #include <dash/util/Trace.h>
 
 #include <dash/dart/if/dart_communication.h>
+#include <dash/Execution.h>
+#include <cstddef>
+
+// #include <dash/algorithm/internal/TransformReduce.h>
+
+#include <dash/Mephisto.h>
 
 #ifdef DASH_ENABLE_OPENMP
 #include <omp.h>
@@ -118,6 +124,9 @@ GlobOutputIt transform(
 #else
 
 namespace internal {
+  template <typename UserKernelT>
+  struct transform_kernel {
+  };
 
 /**
  * Wrapper of the blocking DART accumulate operation.
@@ -253,6 +262,7 @@ GlobOutputIt transform_local(
   // Return out_end iterator past final transformed element;
   return out_first + num_gvalues;
 }
+
 
 /**
  * Specialization of \c dash::transform for global lhs input range.
@@ -434,7 +444,130 @@ GlobOutputIt transform(
   return out_first + num_local_elements;
 }
 
-} // namespace internal
+}
+
+/**
+ * Implementation for execution policies with a unary operation.
+ *
+ * This implementation assumes nothing about the allocation of first and
+ * out_first, but optimizes when first == out_first.
+ *
+ * When the policy provides an executor, the bulk_twoway_execute function
+ * is called with global *iterators* as input. The executor has to handle
+ * DASH's iterators.
+ *
+ */
+template <
+    class ExecutionPolicy,
+    class GlobInputIt,
+    class GlobOutputIt,
+    class UnaryOp>
+typename std::enable_if<
+    dash::is_execution_policy<typename std::decay<ExecutionPolicy>::type >::value,
+    GlobOutputIt>::type
+transform(
+    // The execution policy to use
+    ExecutionPolicy&& policy,
+    /// Iterator on begin of first local range
+    GlobInputIt first,
+    /// Iterator after last element of local range
+    GlobInputIt last,
+    /// Iterator on first element of global output range
+    GlobOutputIt out_first,
+    /// Reduce operation
+    UnaryOp unary_op)
+{
+  DASH_LOG_DEBUG("dash::transform(af, al, bf, outf, binop)");
+  // Outut range different from rhs input range is not supported yet
+
+  using value_type = typename dash::iterator_traits<GlobInputIt>::value_type;
+  std::vector<value_type> result(std::distance(first, last));
+  if (first  != out_first) {
+    DASH_THROW(
+      dash::exception::NotImplemented,
+      "dash::transform is only implemented for out = op(in,out)");
+    // Output range is rhs input range: C += A
+    // Input is (in_a_first, in_a_last).
+  } else {
+    auto&                               executor = policy.executor();
+    auto&                               pattern  = first.pattern();
+
+    using kernel_t          = internal::transform_kernel<UnaryOp>;
+    using pattern_t         = typename GlobInputIt::pattern_type;
+    using shape_t           = typename pattern_t::viewspec_type;
+    using dim               = alpaka::dim::DimInt<pattern.ndim()>;
+    using acc_t             = typename decltype(executor)::acc_t;
+
+    using value_type   = typename GlobInputIt::value_type;
+    using result_type  = typename GlobOutputIt::value_type;
+    auto  nelems       = dash::distance(first, last);
+    auto  out_end      = std::next(out_first, nelems);
+    auto  local_range  = dash::local_range(out_first, out_end);
+    auto& queue        = executor.queue();
+
+    for (auto& entity : executor.entities()) {
+      for (auto& block : pattern.blocks_local_for_entity(entity)) {
+        if (block.size() == 0) {
+          continue;
+        }
+
+        // 1. create workdiv from block
+        auto extents = alpaka::vec::createVecFromIndexedFnWorkaround<
+            dim,
+            std::size_t,
+            arr_to_vec>(block.extents());
+        char* nblocks = "1";
+        /* nblocks            = "1";  // getenv("NBLOCKS"); */
+        auto thread_extent = alpaka::vec::createVecFromIndexedFnWorkaround<
+            dim,
+            std::size_t,
+            unity_vec>(
+            static_cast<std::size_t>(block.size() / atoi(nblocks)));
+
+        auto offsets = block.offsets();
+
+        alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
+            alpaka::workdiv::getValidWorkDiv<acc_t>(
+                entity.device(), extents, thread_extent, false)};
+
+        // 2. create host buffer
+
+        auto block_begin =
+            (first.globmem().begin() + pattern.local_at(offsets)).local();
+
+        auto host = alpaka::dev::DevCpu{
+            alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
+        auto host_buf = alpaka::mem::view::createStaticDevMemView(
+            block_begin.local(), host, extents);
+
+        // 3. copy the buffer to the entity
+        using device_buf_t =
+            alpaka::mem::buf::Buf<dev_t, value_type, dim, std::size_t>;
+        auto device_buf =
+            device_buf_t(alpaka::mem::buf::alloc<value_type, std::size_t>(
+                entity.device(), extents));
+        alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
+
+        alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
+
+        // 4. work
+        kernel_t kernel(unary_op);
+
+        auto const taskKernel(alpaka::kernel::createTaskKernel<acc_t>(
+            workDiv,
+            kernel,
+            alpaka::mem::view::getPtrNative(device_buf),
+            block));
+
+        alpaka::queue::enqueue(queue, taskKernel);
+
+        // copy result buffer back to host
+        alpaka::mem::view::copy(
+            queue, host_buf, device_buf, block.size() * sizeof(value_type));
+      }
+    }
+  }
+}
 
 template <
     class InputIt,
