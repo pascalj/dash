@@ -10,6 +10,7 @@
 #include <array>
 
 #include <dash/Mephisto.h>
+#include <patterns/local_pattern.h>
 
 
 TEST_F(TransformTest, ArrayLocalPlusLocal)
@@ -226,10 +227,16 @@ TEST_F(TransformTest, MatrixGlobalPlusGlobalBlocking)
 
 TEST_F(TransformTest, MephistoBasicTest)
 {
-  // Block-wise addition (a += b) of two matrices
-  using value_t = int64_t;
+  using value_t   = int;
+  using entity_t  = dash::CpuSerialEntity<1>;
+  using pattern_t =
+      patterns::BalancedLocalPattern<dash::BlockPattern<1>, entity_t>;
 
-  dash::Array<value_t> arr(100 * dash::size());
+  pattern_t pattern{100 * dash::size()};
+  const auto layout = dash::ROW_MAJOR;
+  dash::NArray<value_t, 1, pattern_t::index_type, pattern_t> arr(pattern);
 
-  dash::AlpakaExecutor<dash::CpuSerialEntity<1>> executor;
+  dash::AlpakaExecutor<entity_t> executor;
+
+  dash::transform(executor, arr.begin(), arr.end(), arr.begin(), dash::plus<int>());
 }

@@ -40,9 +40,9 @@ struct Entity {
     return alpaka::pltf::getDevCount<pltf_t>();
   }
 
-  auto device() const
+  dev_t device() const
   {
-    return alpaka::pltf::getDevByIdx<pltf_t>(_index);
+    return dev_t{alpaka::pltf::getDevByIdx<pltf_t>(_index)};
   }
 
   static auto all()
