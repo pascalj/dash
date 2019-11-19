@@ -1,8 +1,11 @@
 
+
 #include "TransformTest.h"
 
+#include <dash/algorithm/Fill.h>
 #include <dash/algorithm/Generate.h>
 #include <dash/algorithm/Transform.h>
+#include <dash/algorithm/Reduce.h>
 
 #include <dash/Array.h>
 #include <dash/Matrix.h>
@@ -238,5 +241,13 @@ TEST_F(TransformTest, MephistoBasicTest)
 
   dash::AlpakaExecutor<entity_t> executor;
 
-  dash::transform(executor, arr.begin(), arr.end(), arr.begin(), dash::plus<int>());
+  dash::fill(arr.begin(), arr.end(), 51);
+
+  dash::transform(
+      executor, arr.begin(), arr.end(), arr.begin(), [](const int a) {
+        return a * 111;
+      });
+
+  auto sum = dash::reduce(arr.begin(), arr.end(), 0);
+  EXPECT_EQ_U(dash::size() * 51 * 100 * 111, sum);
 }

@@ -6,6 +6,10 @@
 #include <dash/SharedCounter.h>
 #include <dash/algorithm/Fill.h>
 #include <dash/algorithm/ForEach.h>
+#include <dash/algorithm/Reduce.h>
+
+#include <dash/Mephisto.h>
+#include <patterns/local_pattern.h>
 
 #include <functional>
 
@@ -166,3 +170,27 @@ TEST_F(ForEachTest, Lambdas)
                  });
 }
 
+
+TEST_F(ForEachTest, MephistoBasicTest)
+{
+  using value_t   = int;
+  using entity_t  = dash::CpuThreadEntity<1>;
+  using pattern_t =
+      patterns::BalancedLocalPattern<dash::BlockPattern<1>, entity_t>;
+
+  pattern_t pattern{100 * dash::size()};
+  const auto layout = dash::ROW_MAJOR;
+  dash::NArray<value_t, 1, pattern_t::index_type, pattern_t> arr(pattern);
+
+  dash::AlpakaExecutor<entity_t> executor;
+
+  dash::fill(arr.begin(), arr.end(), 51);
+
+  dash::for_each(
+      executor, arr.begin(), arr.end(), [](int& a) {
+        return a = a * 111;
+      });
+
+  auto sum = dash::reduce(arr.begin(), arr.end(), 0);
+  EXPECT_EQ_U(dash::size() * 51 * 100 * 111, sum);
+}

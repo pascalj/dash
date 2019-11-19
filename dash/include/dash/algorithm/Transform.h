@@ -124,37 +124,57 @@ GlobOutputIt transform(
 #else
 
 namespace internal {
-template <typename UserKernelT>
+template <typename UnaryOp>
 struct transform_kernel {
+  transform_kernel(UnaryOp& unary_op) : unary_op(unary_op) {}
 
-  template <typename TAcc>
-  void operator()(TAcc const& acc) const
+  template <typename TAcc, typename InputT, typename OutputT>
+  void operator()(
+      TAcc const&   acc,
+      const InputT* begin,
+      OutputT*      out,
+      std::size_t   num_elems) const
   {
-    std::cout << "Kernel invocation" << std::endl;
+    const auto gridThreadIdx(
+        alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
+    const auto threadElemExtent(
+        alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0u]);
+    const auto threadFirstElemIdx(gridThreadIdx * threadElemExtent);
+
+    if (threadFirstElemIdx < num_elems) {
+      // Calculate the number of elements to compute in this thread.
+      // The result is uniform for all but the last thread.
+      const auto threadLastElemIdx(threadFirstElemIdx + threadElemExtent);
+      const auto threadLastElemIdxClipped(
+          (num_elems > threadLastElemIdx) ? threadLastElemIdx : num_elems);
+
+      for (auto i = threadFirstElemIdx; i < threadLastElemIdxClipped; ++i) {
+        out[i] = unary_op(begin[i]);
+      }
+    }
   }
-};
 
-/**
- * Wrapper of the blocking DART accumulate operation.
- */
-template< typename ValueType >
-inline dart_ret_t transform_blocking_impl(
-  dart_gptr_t        dest,
-  ValueType        * values,
-  size_t             nvalues,
-  dart_operation_t   op)
-{
-  static_assert(dash::dart_datatype<ValueType>::value != DART_TYPE_UNDEFINED,
-      "Cannot accumulate unknown type!");
+  UnaryOp unary_op;
+  };
 
-  dart_ret_t result = dart_accumulate(
-                        dest,
-                        (values),
-                        nvalues,
-                        dash::dart_datatype<ValueType>::value,
-                        op);
-  dart_flush(dest);
-  return result;
+  /**
+   * Wrapper of the blocking DART accumulate operation.
+   */
+  template <typename ValueType>
+  inline dart_ret_t transform_blocking_impl(
+      dart_gptr_t      dest,
+      ValueType*       values,
+      size_t           nvalues,
+      dart_operation_t op)
+  {
+    static_assert(
+        dash::dart_datatype<ValueType>::value != DART_TYPE_UNDEFINED,
+        "Cannot accumulate unknown type!");
+
+    dart_ret_t result = dart_accumulate(
+        dest, (values), nvalues, dash::dart_datatype<ValueType>::value, op);
+    dart_flush(dest);
+    return result;
 }
 
 /**
@@ -464,16 +484,16 @@ GlobOutputIt transform(
  *
  */
 template <
-    class ExecutionPolicy,
+    class Executor,
     class GlobInputIt,
     class GlobOutputIt,
     class UnaryOp>
 typename std::enable_if<
-    dash::is_executor<typename std::decay<ExecutionPolicy>::type >::value,
+    dash::is_executor<typename std::decay<Executor>::type >::value,
     GlobOutputIt>::type
 transform(
     // The execution policy to use
-    ExecutionPolicy&& executor,
+    Executor&& executor,
     /// Iterator on begin of first local range
     GlobInputIt first,
     /// Iterator after last element of local range
@@ -497,7 +517,7 @@ transform(
   } else {
     auto& pattern  = first.pattern();
 
-    using executor_t  = typename std::decay<ExecutionPolicy>::type;
+    using executor_t  = typename std::decay<Executor>::type;
     using kernel_t    = internal::transform_kernel<UnaryOp>;
     using pattern_t   = typename GlobInputIt::pattern_type;
     using shape_t     = typename pattern_t::viewspec_type;
@@ -541,14 +561,16 @@ transform(
                 entity.device(), extents, thread_extent, false)};
 
         // 2. create host buffer
-
+        // FIXME: this assumes first == pattern.first()
         auto block_begin =
-            static_cast<GlobInputIt>(first.globmem().begin()) + pattern.local_at(offsets);
+            first + pattern.local_at(offsets);
+
+        assert(block_begin.is_local());
 
         auto host = alpaka::dev::DevCpu{
             alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
         auto host_buf = alpaka::mem::view::createStaticDevMemView(
-            first.local(), host, extents);
+            block_begin.local(), host, extents);
 
         // 3. copy the buffer to the entity
         using device_buf_t =
@@ -557,24 +579,35 @@ transform(
             entity.device(), extents));
         alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
 
-        /* alpaka::mem::view::copy(queue, device_buf, host_buf, extents); */
+        // allocate the result buffer
+        using device_result_t =
+            alpaka::mem::buf::Buf<dev_t, result_type, dim, std::size_t>;
+        device_result_t device_result_buf(alpaka::mem::buf::alloc<result_type, std::size_t>(
+            entity.device(), extents));
 
         // 4. work
-        kernel_t kernel;
+        kernel_t kernel(unary_op);
+        auto const taskKernel = alpaka::kernel::createTaskKernel<acc_t>(
+            workDiv,
+            kernel,
+            alpaka::mem::view::getPtrNative(device_buf),
+            alpaka::mem::view::getPtrNative(device_result_buf),
+            block.size());
 
-        alpaka::kernel::exec<acc_t>(queue, workDiv, kernel);
-        /* auto const taskKernel(alpaka::kernel::createTaskKernel<acc_t>( */
-        /*     workDiv, */
-        /*     kernel)); */
-            /* block_begin, */
-            /* alpaka::mem::view::getPtrNative(device_buf), */
-            /* block)); */
+        DASH_LOG_DEBUG("Startking kernel on block", block);
+        alpaka::queue::enqueue(queue, taskKernel);
 
-        /* alpaka::queue::enqueue(queue, taskKernel); */
+        auto result_block_begin = out_first + pattern.local_at(offsets);
+        auto result_buf = alpaka::mem::view::createStaticDevMemView(
+            result_block_begin.local(), host, extents);
+
+
+        DASH_LOG_DEBUG("Result native", alpaka::mem::view::getPtrNative(device_result_buf)[0]);
 
         // copy result buffer back to host
-        /* alpaka::mem::view::copy( */
-        /*     queue, host_buf, device_buf, block.size() * sizeof(value_type)); */
+        alpaka::mem::view::copy(
+            queue, result_buf, device_result_buf, extents);
+        DASH_LOG_DEBUG("Result out", result_block_begin.local()[0]);
       }
     }
   }

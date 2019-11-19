@@ -2,6 +2,7 @@
 #include <dash/algorithm/Reduce.h>
 #include <dash/iterator/IteratorTraits.h>
 #include <dash/Execution.h>
+#include <dash/Mephisto.h>
 
 namespace dash {
 
@@ -96,50 +97,113 @@ T transform_reduce(
       &root);
 }
 
+namespace internal {
+template <typename BinaryOp, typename UnaryOp>
+struct transform_reduce_kernel {
+
+  template <typename TAcc>
+  void operator()(const TAcc& acc) const
+  {
+  }
+};
+}
+
 template <
-    class ExecutionPolicy,
+    class Executor,
     class InputIt,
     class T,
-    class BinaryOperation,
-    class UnaryOperation>
+    class BinaryOp,
+    class UnaryOp>
 typename std::enable_if<
-    is_execution_policy<typename std::decay<ExecutionPolicy>::type>::value,
+    dash::is_executor<typename std::decay<Executor>::type>::value,
     T>::type
 transform_reduce(
-    ExecutionPolicy&& policy,
-    InputIt           in_first,
-    InputIt           in_last,
-    T                 init,
-    BinaryOperation   binary_op,
-    UnaryOperation    unary_op)
+    Executor&& executor,
+    InputIt    in_first,
+    InputIt    in_last,
+    T          init,
+    BinaryOp   binary_op,
+    UnaryOp    unary_op)
 {
-  using value_type = typename std::iterator_traits<InputIt>::value_type;
+  auto& pattern = in_first.pattern();
 
-  auto executor = policy.executor();//.prefer(execution::reduction_executor{});
-  // This is not standard, but necessary to reserve the right amount of resources
-  size_t         concurrency = executor.concurrency();
-  std::vector<T> results(concurrency, init);
+  using executor_t  = typename std::decay<Executor>::type;
+  using kernel_t    = internal::transform_reduce_kernel<BinaryOp, UnaryOp>;
+  using pattern_t   = typename InputIt::pattern_type;
+  using shape_t     = typename pattern_t::viewspec_type;
+  using dim         = alpaka::dim::DimInt<pattern.ndim()>;
+  using acc_t       = typename executor_t::acc_t;
+  using dev_t       = typename executor_t::dev_t;
+  using value_type  = typename InputIt::value_type;
+  using result_type = typename std::result_of<BinaryOp>::type;
 
-  executor.bulk_twoway_execute(
-      // note: we can only capture by copy here
-      [=] FN_HOST_ACC (
-          size_t block_index,
-          size_t element_index,
-          T * res,
-          const value_type * block_first) {
-        res[block_index] =
-            binary_op(res[block_index], unary_op(block_first[element_index]));
-      },
-      in_first,                                      // "shape"
-      [&]() -> std::vector<T>& { return results; },  // result factory
-      [=] {
-        return std::make_pair(in_first, in_last);
-      });  // shared state, unused here
+  auto& queue       = executor.sync_queue();
 
-  in_first.pattern().team().barrier();
+  std::vector<result_type> results;
 
-  // Use dash's reduce for the non-local parts
-  return reduce(results.begin(), results.end(), init, binary_op);
+  for (auto& entity : executor.entities()) {
+    for (auto& block : pattern.blocks_local_for_entity(entity)) {
+      if (block.size() == 0) {
+        continue;
+      }
+
+      // 1. create workdiv from block
+      auto extents = alpaka::vec::
+          createVecFromIndexedFnWorkaround<dim, std::size_t, arr_to_vec>(
+              block.extents());
+      int nblocks = 1;
+
+      if (char* blocks_override = getenv("NBLOCKS")) {
+        nblocks = atoi(blocks_override);
+      }
+      auto thread_extent = alpaka::vec::
+          createVecFromIndexedFnWorkaround<dim, std::size_t, unity_vec>(
+              static_cast<std::size_t>(block.size() / nblocks));
+
+      auto offsets = block.offsets();
+
+      alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
+          alpaka::workdiv::getValidWorkDiv<acc_t>(
+              entity.device(), extents, thread_extent, false)};
+
+      // 2. create host buffer
+      // FIXME: this assumes first == pattern.first()
+      auto block_begin = in_first + pattern.local_at(offsets);
+
+      assert(block_begin.is_local());
+
+      auto host = alpaka::dev::DevCpu{
+          alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
+      auto host_buf = alpaka::mem::view::createStaticDevMemView(
+          block_begin.local(), host, extents);
+
+      // 3. copy the buffer to the entity
+      using device_buf_t =
+          alpaka::mem::buf::Buf<dev_t, value_type, dim, std::size_t>;
+      device_buf_t device_buf(
+          alpaka::mem::buf::alloc<value_type, std::size_t>(
+              entity.device(), extents));
+      alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
+
+      // allocate the result buffer
+      using device_result_t =
+          alpaka::mem::buf::Buf<dev_t, result_type, dim, std::size_t>;
+      device_result_t device_result_buf(
+          alpaka::mem::buf::alloc<result_type, std::size_t>(
+              entity.device(), extents));
+
+      // 4. work
+      kernel_t   kernel(unary_op);
+      auto const taskKernel = alpaka::kernel::createTaskKernel<acc_t>(
+          workDiv,
+          kernel,
+          alpaka::mem::view::getPtrNative(device_buf),
+          alpaka::mem::view::getPtrNative(device_result_buf),
+          block.size());
+
+      alpaka::queue::enqueue(queue, taskKernel);
+    }
+  }
 }
 
 }  // namespace dash
