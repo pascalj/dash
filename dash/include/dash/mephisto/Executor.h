@@ -9,11 +9,16 @@ struct AlpakaExecutor {
   using acc_t         = typename Entity::acc_t;
   using dev_t         = typename Entity::dev_t;
   using pltf_t        = typename Entity::pltf_t;
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+  using sync_queue_t  = alpaka::queue::QueueCudaRtBlocking;
+  using async_queue_t = alpaka::queue::QueueCudaRtNonBlocking;
+#else
   using sync_queue_t  = alpaka::queue::QueueCpuBlocking;
   using async_queue_t = alpaka::queue::QueueCpuNonBlocking;
+#endif
 
   AlpakaExecutor()
-    : _sync_queue(alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u))
+    : _sync_queue(alpaka::pltf::getDevByIdx<pltf_t>(0u))
   {
   }
 

@@ -1,4 +1,4 @@
-project(project_dash_libdash CXX)
+project(project_dash_libdash CXX CUDA)
 
 # Load global build settings
 set(DASH_DART_IF_INCLUDE_DIR ${DASH_DART_IF_INCLUDE_DIR}
@@ -54,7 +54,7 @@ file(GLOB_RECURSE DASH_TEST_SOURCES
 
 foreach(TESTCASE ${TESTCASES_LIST})
 file(GLOB_RECURSE DASH_TEST_SOURCES
-  ${DASH_TEST_SOURCES} "test/${TESTCASE}.h" "test/${TESTCASE}.cc")
+  ${DASH_TEST_SOURCES} "test/${TESTCASE}.h" "test/${TESTCASE}.cc" "test/${TESTCASE}.cu")
 endforeach()
 
 # Directories containing the implementation of the library (-I):
@@ -299,7 +299,7 @@ foreach (dart_variant ${DART_IMPLEMENTATIONS_LIST})
   set (VARIANT_ADDITIONAL_COMPILE_FLAGS
          "${VARIANT_ADDITIONAL_COMPILE_FLAGS} ${ADDITIONAL_COMPILE_FLAGS_STR}")
   set (VARIANT_ADDITIONAL_COMPILE_FLAGS
-       "${VARIANT_ADDITIONAL_COMPILE_FLAGS} ${CXX_OMP_FLAG}")
+       "${VARIANT_ADDITIONAL_COMPILE_FLAGS}")
   message(STATUS "Building DASH library    " ${DASH_LIBRARY})
 
   # generate dash StaticConfig.h
@@ -430,11 +430,6 @@ foreach (dart_variant ${DART_IMPLEMENTATIONS_LIST})
         endif()
         set_target_properties(
           ${exampletarget} PROPERTIES
-          COMPILE_FLAGS
-          "${VARIANT_ADDITIONAL_COMPILE_FLAGS} -Wno-unused"
-        )
-        set_target_properties(
-          ${exampletarget} PROPERTIES
           CXX_STANDARD ${DASH_CXX_STD_PREFERED}
           CXX_STANDARD_REQUIRED ON
         )
@@ -482,11 +477,11 @@ if (BUILD_TESTS)
             ${IPM_LIBRARIES})
         endif()
       endif()
-      set_target_properties(
-        ${DASH_TEST} PROPERTIES
-        COMPILE_FLAGS
-        "${VARIANT_ADDITIONAL_COMPILE_FLAGS} -Wno-unused -Wno-sign-compare"
-      )
+                  set_target_properties(
+                     ${DASH_TEST} PROPERTIES
+               COMPILE_FLAGS
+              "${VARIANT_ADDITIONAL_COMPILE_FLAGS}" # -Wno-unused -Wno-sign-compare"
+             )
       set_target_properties(
         ${DASH_TEST} PROPERTIES
         CXX_STANDARD ${DASH_CXX_STD_PREFERED}

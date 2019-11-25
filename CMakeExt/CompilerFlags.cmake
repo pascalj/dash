@@ -174,7 +174,6 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     # using GCC
     set (CXX_STD_FLAG "--std=c++${DASH_CXX_STD_PREFERED}"
         CACHE STRING "C++ compiler std flag")
-    set (CXX_GDB_FLAG "-ggdb3 -rdynamic")
     if(ENABLE_LT_OPTIMIZATION)
         set (CXX_LTO_FLAG "-flto -fwhole-program -fno-use-linker-plugin")
     endif()

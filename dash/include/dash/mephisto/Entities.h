@@ -59,10 +59,20 @@ private:
   std::size_t _index = 0u;
 };
 
+#ifdef ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
 template<std::size_t Size>
 using CpuSerialEntity = Entity<Size, alpaka::acc::AccCpuSerial>;
+#endif
 
+#ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
 template<std::size_t Size>
 using CpuThreadEntity = Entity<Size, alpaka::acc::AccCpuThreads>;
+#endif
+
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+template<std::size_t Size>
+using CudaEntity = Entity<Size, alpaka::acc::AccGpuCudaRt>;
+#endif
 
 }  // namespace dash

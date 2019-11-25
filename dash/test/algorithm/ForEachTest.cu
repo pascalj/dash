@@ -170,7 +170,7 @@ TEST_F(ForEachTest, Lambdas)
                  });
 }
 
-
+#ifdef ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
 TEST_F(ForEachTest, MephistoBasicTest)
 {
   using value_t   = int;
@@ -194,3 +194,39 @@ TEST_F(ForEachTest, MephistoBasicTest)
   auto sum = dash::reduce(arr.begin(), arr.end(), 0);
   EXPECT_EQ_U(dash::size() * 51 * 100 * 111, sum);
 }
+#endif
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+
+void run_my_test() {
+  using value_t   = int;
+  using entity_t  = dash::CudaEntity<1>;
+  using pattern_t =
+      patterns::BalancedLocalPattern<dash::BlockPattern<1>, entity_t>;
+
+  pattern_t pattern{100 * dash::size()};
+  const auto layout = dash::ROW_MAJOR;
+  dash::NArray<value_t, 1, pattern_t::index_type, pattern_t> arr(pattern);
+
+  dash::AlpakaExecutor<entity_t> executor;
+
+  dash::fill(arr.begin(), arr.end(), 51);
+
+#ifdef __CUDACC_EXTENDED_LAMBDA__
+  auto times111 = [=] __device__ (int a) { return a = a * 111; };
+#else
+#error "Need extended lambdas."
+#endif
+  dash::for_each(
+      executor, arr.begin(), arr.end(), times111);
+
+  auto sum = dash::reduce(arr.begin(), arr.end(), 0);
+  EXPECT_EQ_U(dash::size() * 51 * 100 * 111, sum);
+}
+
+
+TEST_F(ForEachTest, MephistoCudaBasicTest)
+{
+  run_my_test();
+}
+#endif

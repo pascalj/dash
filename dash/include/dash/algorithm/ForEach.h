@@ -120,9 +120,8 @@ namespace internal {
     for_each_kernel(Func func) : func(func) {}
 
     template <typename TAcc, typename T>
-    void operator()(const TAcc& acc, T* begin, std::size_t num_elems) const
+    FN_HOST_ACC void operator()(const TAcc& acc, T* begin, std::size_t num_elems) const
     {
-      DASH_LOG_DEBUG("ForEach kernel");
       const auto gridThreadIdx(
           alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
       const auto threadElemExtent(
@@ -177,7 +176,7 @@ namespace internal {
     using kernel_t   = internal::for_each_kernel<UnaryFunction>;
     using pattern_t  = typename InputIt::pattern_type;
     using shape_t    = typename pattern_t::viewspec_type;
-    using dim        = alpaka::dim::DimInt<pattern.ndim()>;
+    using dim        = alpaka::dim::DimInt<pattern_t::ndim()>;
     using acc_t      = typename executor_t::acc_t;
     using dev_t      = typename executor_t::dev_t;
     using value_type = typename InputIt::value_type;
