@@ -199,29 +199,32 @@ TEST_F(ForEachTest, MephistoBasicTest)
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
 void run_my_test() {
-  using value_t   = int;
+  using value_t   = float;
   using entity_t  = dash::CudaEntity<1>;
   using pattern_t =
       patterns::BalancedLocalPattern<dash::BlockPattern<1>, entity_t>;
 
-  pattern_t pattern{100 * dash::size()};
+  using memory_t = dash::CudaSpace;
+
+  pattern_t pattern{1024 * 1024 * 1024 * dash::size() / sizeof(value_t)};
   const auto layout = dash::ROW_MAJOR;
-  dash::NArray<value_t, 1, pattern_t::index_type, pattern_t> arr(pattern);
+  dash::NArray<value_t, 1, pattern_t::index_type, pattern_t, memory_t> arr(pattern);
 
   dash::AlpakaExecutor<entity_t> executor;
 
   dash::fill(arr.begin(), arr.end(), 51);
 
 #ifdef __CUDACC_EXTENDED_LAMBDA__
-  auto times111 = [=] __device__ (int a) { return a = a * 111; };
+  auto times111 = [=] __device__ (value_t &a) { return a *= 111; };
 #else
 #error "Need extended lambdas."
 #endif
   dash::for_each(
       executor, arr.begin(), arr.end(), times111);
 
-  auto sum = dash::reduce(arr.begin(), arr.end(), 0);
-  EXPECT_EQ_U(dash::size() * 51 * 100 * 111, sum);
+  cudaDeviceSynchronize();
+  long long sum = dash::reduce(arr.begin(), arr.end(), 0LL);
+  EXPECT_EQ(dash::size() * 51.0 * 1024 * 1024 * 1024 * 111 / sizeof(value_t), sum);
 }
 
 

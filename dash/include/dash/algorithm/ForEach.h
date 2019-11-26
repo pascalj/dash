@@ -206,13 +206,18 @@ namespace internal {
         }
         auto thread_extent = alpaka::vec::
             createVecFromIndexedFnWorkaround<dim, std::size_t, unity_vec>(
-                static_cast<std::size_t>(block.size() / nblocks));
+                static_cast<std::size_t>(1)); //block.size() / nblocks));
+
+        std::cout << "Thread extent: " << thread_extent << std::endl;
 
         auto offsets = block.offsets();
 
         alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
             alpaka::workdiv::getValidWorkDiv<acc_t>(
                 entity.device(), extents, thread_extent, false)};
+
+
+        std::cout << "Workdiv: " << workDiv << std::endl;
 
         // 2. create host view
         // FIXME: this assumes first == pattern.first()
@@ -232,6 +237,11 @@ namespace internal {
             block.size());
 
         alpaka::queue::enqueue(queue, taskKernel);
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+        auto err = cudaMemPrefetchAsync(block_begin.local(), sizeof(value_type) * block.size(), cudaCpuDeviceId, queue.m_spQueueImpl->m_CudaQueue);
+        std::cout << "queue: " << queue.m_spQueueImpl->m_CudaQueue << std::endl;
+        std::cout << "errocode: " << err << std::endl;
+#endif
       }
     }
 }

@@ -45,7 +45,7 @@ set(ENABLE_MEMKIND ${ENABLE_MEMKIND}
 
 # Source- and header files to be compiled (OBJ):
 file(GLOB_RECURSE DASH_LIBRARY_SOURCES
-     "src/*.c" "src/*.h" "src/*.cc" "src/*.cpp" )
+     "src/*.c" "src/*.h" "src/*.cc" "src/*.cpp" "src/*.cu")
 file(GLOB_RECURSE DASH_LIBRARY_HEADERS
      "include/*.h")
 
