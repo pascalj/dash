@@ -530,7 +530,6 @@ transform(
     auto  nelems      = dash::distance(first, last);
     auto  out_end     = std::next(out_first, nelems);
     auto  local_range = dash::local_range(out_first, out_end);
-    auto& queue       = executor.sync_queue();
 
     for (auto& entity : executor.entities()) {
       for (auto& block : pattern.blocks_local_for_entity(entity)) {
@@ -577,6 +576,7 @@ transform(
             alpaka::mem::buf::Buf<dev_t, value_type, dim, std::size_t>;
         device_buf_t device_buf(alpaka::mem::buf::alloc<value_type, std::size_t>(
             entity.device(), extents));
+        auto& queue       = executor.sync_queue(entity);
         alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
 
         // allocate the result buffer

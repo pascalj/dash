@@ -199,20 +199,22 @@ TEST_F(ForEachTest, MephistoBasicTest)
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
 void run_my_test() {
-  using value_t   = float;
+  using value_t   = uint64_t;
   using entity_t  = dash::CudaEntity<1>;
   using pattern_t =
-      patterns::BalancedLocalPattern<dash::BlockPattern<1>, entity_t>;
+      patterns::UnitRRPattern<dash::BlockPattern<1>, entity_t>;
 
   using memory_t = dash::CudaSpace;
 
-  pattern_t pattern{1024 * 1024 * 1024 * dash::size() / sizeof(value_t)};
-  const auto layout = dash::ROW_MAJOR;
+  const size_t problem_size = 64 * 1024 * 1024 * dash::size() / sizeof(value_t);
+  const value_t init = 51;
+
+  pattern_t pattern{problem_size};
   dash::NArray<value_t, 1, pattern_t::index_type, pattern_t, memory_t> arr(pattern);
 
   dash::AlpakaExecutor<entity_t> executor;
 
-  dash::fill(arr.begin(), arr.end(), 51);
+  dash::fill(arr.begin(), arr.end(), init);
 
 #ifdef __CUDACC_EXTENDED_LAMBDA__
   auto times111 = [=] __device__ (value_t &a) { return a *= 111; };
@@ -224,7 +226,7 @@ void run_my_test() {
 
   cudaDeviceSynchronize();
   long long sum = dash::reduce(arr.begin(), arr.end(), 0LL);
-  EXPECT_EQ(dash::size() * 51.0 * 1024 * 1024 * 1024 * 111 / sizeof(value_t), sum);
+  EXPECT_EQ(problem_size * init * 111, sum);
 }
 
 

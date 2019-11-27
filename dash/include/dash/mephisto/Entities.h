@@ -48,10 +48,11 @@ struct Entity {
   static auto all()
   {
     std::vector<Entity> entities;
-    entities.reserve(total());
+
     for (std::size_t i = 0; i < total(); i++) {
       entities.emplace_back(i);
     }
+
     return entities;
   }
 

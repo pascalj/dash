@@ -17,13 +17,14 @@ struct AlpakaExecutor {
   using async_queue_t = alpaka::queue::QueueCpuNonBlocking;
 #endif
 
-  AlpakaExecutor()
-    : _sync_queue(alpaka::pltf::getDevByIdx<pltf_t>(0u))
-  {
+  AlpakaExecutor() {
+    for(std::size_t i = 0; i < Entity::total(); i++) {
+      _sync_queues.emplace_back(alpaka::pltf::getDevByIdx<pltf_t>(i));
+    }
   }
 
-  sync_queue_t& sync_queue() {
-    return _sync_queue;
+  sync_queue_t& sync_queue(const Entity &entity) {
+    return _sync_queues.at(entity.index());
   }
 
   auto entities() {
@@ -36,7 +37,7 @@ struct AlpakaExecutor {
 
 private:
   /* async_queue_t _async_queue; */
-  sync_queue_t _sync_queue;
+  std::vector<sync_queue_t> _sync_queues;
 };
 
 template<typename T>

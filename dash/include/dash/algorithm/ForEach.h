@@ -181,10 +181,6 @@ namespace internal {
     using dev_t      = typename executor_t::dev_t;
     using value_type = typename InputIt::value_type;
 
-    auto& queue        = executor.sync_queue();
-    auto  index_range  = dash::local_index_range(first, last);
-    auto  lbegin_index = index_range.begin;
-    auto  lend_index   = index_range.end;
     auto& team         = first.pattern().team();
     auto  host         = alpaka::dev::DevCpu{
         alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
@@ -194,6 +190,7 @@ namespace internal {
         if (block.size() == 0) {
           continue;
         }
+        std::cout << dash::myid() << " entity " << entity.index() << std::endl;
 
         // 1. create workdiv from block
         auto extents = alpaka::vec::
@@ -236,12 +233,8 @@ namespace internal {
             alpaka::mem::view::getPtrNative(host_buf),
             block.size());
 
+        auto& queue        = executor.sync_queue(entity);
         alpaka::queue::enqueue(queue, taskKernel);
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-        auto err = cudaMemPrefetchAsync(block_begin.local(), sizeof(value_type) * block.size(), cudaCpuDeviceId, queue.m_spQueueImpl->m_CudaQueue);
-        std::cout << "queue: " << queue.m_spQueueImpl->m_CudaQueue << std::endl;
-        std::cout << "errocode: " << err << std::endl;
-#endif
       }
     }
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "block_range.h"
+#include "local_patterns/unit_rr_pattern.h"
 
 namespace patterns {
 
