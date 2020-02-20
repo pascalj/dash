@@ -4,6 +4,8 @@
 #include <dash/Execution.h>
 #include <dash/Mephisto.h>
 
+#include "mephisto/ReduceKernel.h"
+
 namespace dash {
 
 namespace detail {
@@ -135,7 +137,7 @@ transform_reduce(
   using acc_t       = typename executor_t::acc_t;
   using dev_t       = typename executor_t::dev_t;
   using value_type  = typename InputIt::value_type;
-  using result_type = typename std::result_of<BinaryOp>::type;
+  using result_type = double;
 
   auto& queue       = executor.sync_queue();
 
@@ -177,31 +179,7 @@ transform_reduce(
       auto host_buf = alpaka::mem::view::createStaticDevMemView(
           block_begin.local(), host, extents);
 
-      // 3. copy the buffer to the entity
-      using device_buf_t =
-          alpaka::mem::buf::Buf<dev_t, value_type, dim, std::size_t>;
-      device_buf_t device_buf(
-          alpaka::mem::buf::alloc<value_type, std::size_t>(
-              entity.device(), extents));
-      alpaka::mem::view::copy(queue, device_buf, host_buf, extents);
-
-      // allocate the result buffer
-      using device_result_t =
-          alpaka::mem::buf::Buf<dev_t, result_type, dim, std::size_t>;
-      device_result_t device_result_buf(
-          alpaka::mem::buf::alloc<result_type, std::size_t>(
-              entity.device(), extents));
-
-      // 4. work
-      kernel_t   kernel(unary_op);
-      auto const taskKernel = alpaka::kernel::createTaskKernel<acc_t>(
-          workDiv,
-          kernel,
-          alpaka::mem::view::getPtrNative(device_buf),
-          alpaka::mem::view::getPtrNative(device_result_buf),
-          block.size());
-
-      alpaka::queue::enqueue(queue, taskKernel);
+      mreduce<result_type, acc_t>(host, entity.device(), queue, block.size(), host_buf, binary_op);
     }
   }
 }

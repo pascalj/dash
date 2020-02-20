@@ -16,7 +16,7 @@
 #include <dash/Execution.h>
 #include <cstddef>
 
-// #include <dash/algorithm/internal/TransformReduce.h>
+#include <dash/algorithm/internal/TransformReduce.h>
 
 #include <dash/Mephisto.h>
 
