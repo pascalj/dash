@@ -77,7 +77,7 @@ struct ReduceKernel
 
         // equivalent to blockIndex * TBlockSize + threadIndex
         const uint32_t linearizedIndex(static_cast<uint32_t>(
-            alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
+            alpaka::idx::getIdx<alpaka::Grid, alpaka::Thread>(acc)[0]));
 
         typename GetIterator<T, TElem, TAcc>::Iterator it(
             acc, source, linearizedIndex, gridDimension * TBlockSize, n);
@@ -149,86 +149,291 @@ struct ReduceKernel
     }
 };
 
+//#############################################################################
+//! A reduction kernel.
+//!
+//! \tparam TBlockSize The block size.
+//! \tparam T The data type.
+//! \tparam TFunc The Functor type for the reduction function.
+template <typename T, typename TFunc>
+struct DReduceKernel
+{
+    ALPAKA_NO_HOST_ACC_WARNING
+
+    //-----------------------------------------------------------------------------
+    //! The kernel entry point.
+    //!
+    //! \tparam TAcc The accelerator environment.
+    //! \tparam TElem The element type.
+    //! \tparam TIdx The index type.
+    //!
+    //! \param acc The accelerator object.
+    //! \param source The source memory.
+    //! \param destination The destination memory.
+    //! \param n The problem size.
+    //! \param func The reduction function.
+    template <typename TAcc, typename TElem, typename TIdx>
+    ALPAKA_FN_ACC auto operator()(TAcc const &acc,
+                                  TElem const *const source,
+                                  TElem *destination,
+                                  TIdx const &n,
+                                  TFunc func) const -> void
+    {
+      auto * const sdata = alpaka::block::shared::dyn::getMem<T>(acc);
+
+      const uint32_t blockIndex(static_cast<uint32_t>(
+          alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0]));
+      const uint32_t threadIndex(static_cast<uint32_t>(
+          alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0]));
+      const uint32_t gridDimension(static_cast<uint32_t>(
+          alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0]));
+      const uint32_t blockSize(static_cast<uint32_t>(
+          alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0]));
+
+      // equivalent to blockIndex * TBlockSize + threadIndex
+      const uint32_t linearizedIndex(static_cast<uint32_t>(
+          alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
+
+      typename GetIterator<T, TElem, TAcc>::Iterator it(
+          acc, source, linearizedIndex, gridDimension * blockSize, n);
+
+      T result = 0;  // suppresses compiler warnings
+
+      if (threadIndex < n)
+        result = *(it++);  // avoids using the
+                           // neutral element of specific
+
+      // --------
+      // Level 1: grid reduce, reading from global memory
+      // --------
+
+      // reduce per thread with increased ILP by 4x unrolling sum.
+      // the thread of our block reduces its 4 grid-neighbored threads and
+      // advances by grid-striding loop (maybe 128bit load improve perf)
+
+      while (it + 3 < it.end()) {
+        result = func(
+            func(func(result, func(*it, *(it + 1))), *(it + 2)), *(it + 3));
+        it += 4;
+        }
+
+        // doing the remaining blocks
+        while (it < it.end())
+            result = func(result, *(it++));
+
+        if (threadIndex < n)
+            sdata[threadIndex] = result;
+
+        alpaka::block::sync::syncBlockThreads(acc);
+
+        // --------
+        // Level 2: block + warp reduce, reading from shared memory
+        // --------
+
+        ALPAKA_UNROLL()
+        for (uint32_t currentBlockSize = blockSize,
+                      currentBlockSizeUp =
+                          (blockSize + 1) / 2; // ceil(TBlockSize/2.0)
+             currentBlockSize > 1;
+             currentBlockSize = currentBlockSize / 2,
+                      currentBlockSizeUp = (currentBlockSize + 1) /
+                                           2) // ceil(currentBlockSize/2.0)
+        {
+            bool cond =
+                threadIndex < currentBlockSizeUp // only first half of block
+                                                 // is working
+                && (threadIndex + currentBlockSizeUp) <
+                       blockSize // index for second half must be in bounds
+                && (blockIndex * blockSize + threadIndex +
+                    currentBlockSizeUp) < n &&
+                threadIndex <
+                    n; // if elem in second half has been initialized before
+
+            if (cond)
+                sdata[threadIndex] =
+                    func(sdata[threadIndex],
+                         sdata[threadIndex + currentBlockSizeUp]);
+
+            alpaka::block::sync::syncBlockThreads(acc);
+        }
+
+        // store block result to gmem
+        if (threadIndex == 0 && threadIndex < n)
+            destination[blockIndex] = sdata[0];
+    }
+};
+
 template <
     typename T,
-    typename Acc,
     typename DevHost,
-    typename DevAcc,
+    typename Entity,
     typename QueueAcc,
     typename HostBuf,
     typename TFunc>
 T mreduce(
     DevHost  devHost,
-    DevAcc   devAcc,
+    Entity   entity,
     QueueAcc queue,
     uint64_t n,
     HostBuf  hostMemory,
     TFunc    func)
 {
-    static constexpr uint64_t blockSize = 256;
+  using dev_t = typename Entity::dev_t;
+  using acc_t = typename Entity::acc_t;
 
-    // calculate optimal block size (8 times the MP count proved to be
-    // relatively near to peak performance in benchmarks)
-    uint32_t blockCount    = static_cast<uint32_t>(84 * 8);
-    uint32_t maxBlockCount = static_cast<uint32_t>(
-        (((n + 1) / 2) - 1) / blockSize + 1); // ceil(ceil(n/2.0)/blockSize)
+  const auto device = entity.device();
 
-    if (blockCount > maxBlockCount)
-        blockCount = maxBlockCount;
+  static constexpr uint64_t blockSize  = 256;
+  uint32_t blockCount = static_cast<uint32_t>(
+      alpaka::acc::getAccDevProps<acc_t, dev_t>(device).m_multiProcessorCount *
+      8);
+  uint32_t maxBlockCount = static_cast<uint32_t>(
+      (((n + 1) / 2) - 1) / blockSize + 1);  // ceil(ceil(n/2.0)/blockSize)
 
+  if (blockCount > maxBlockCount)
+      blockCount = maxBlockCount;
 
-    using Dim = alpaka::dim::DimInt<1u>;
-    using Idx = uint64_t;
-    using Extent = uint64_t;
+  using Dim    = alpaka::dim::DimInt<1u>;
+  using Idx    = uint64_t;
+  using Extent = uint64_t;
 
-    alpaka::mem::buf::Buf<DevAcc, T, Dim, Extent> sourceDeviceMemory =
-        alpaka::mem::buf::alloc<T, Idx>(devAcc, n);
+  alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> sourceDeviceMemory =
+      alpaka::mem::buf::alloc<T, Idx>(device, n);
 
-    alpaka::mem::buf::Buf<DevAcc, T, Dim, Extent> destinationDeviceMemory =
-        alpaka::mem::buf::alloc<T, Idx>(
-            devAcc, static_cast<Extent>(blockCount));
+  alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> destinationDeviceMemory =
+      alpaka::mem::buf::alloc<T, Idx>(
+          device, static_cast<Extent>(blockCount));
 
-    // copy the data to the GPU
-    alpaka::mem::view::copy(queue, sourceDeviceMemory, hostMemory, n);
+  // copy the data to the GPU
+  alpaka::mem::view::copy(queue, sourceDeviceMemory, hostMemory, n);
 
-    // create kernels with their workdivs
-    ReduceKernel<blockSize, T, TFunc> kernel1, kernel2;
-    WorkDiv workDiv1{ static_cast<Extent>(blockCount),
-                      static_cast<Extent>(blockSize),
-                      static_cast<Extent>(1) };
-    WorkDiv workDiv2{ static_cast<Extent>(1),
-                      static_cast<Extent>(blockSize),
-                      static_cast<Extent>(1) };
+  // create kernels with their workdivs
+  ReduceKernel<blockSize, T, TFunc> kernel1, kernel2;
 
-    // create main reduction kernel execution task
-    auto const taskKernelReduceMain(alpaka::kernel::createTaskKernel<Acc>(
-        workDiv1,
-        kernel1,
-        alpaka::mem::view::getPtrNative(sourceDeviceMemory),
-        alpaka::mem::view::getPtrNative(destinationDeviceMemory),
-        n,
-        func));
+  WorkDiv                           workDiv1{static_cast<Extent>(blockCount),
+                   static_cast<Extent>(blockSize),
+                   static_cast<Extent>(1)};
+  WorkDiv                           workDiv2{static_cast<Extent>(1),
+                   static_cast<Extent>(blockSize),
+                   static_cast<Extent>(1)};
 
-    // create last block reduction kernel execution task
-    auto const taskKernelReduceLastBlock(alpaka::kernel::createTaskKernel<Acc>(
-        workDiv2,
-        kernel2,
-        alpaka::mem::view::getPtrNative(destinationDeviceMemory),
-        alpaka::mem::view::getPtrNative(destinationDeviceMemory),
-        blockCount,
-        func));
+  // create main reduction kernel execution task
+  auto const taskKernelReduceMain(alpaka::kernel::createTaskKernel<acc_t>(
+      workDiv1,
+      kernel1,
+      alpaka::mem::view::getPtrNative(sourceDeviceMemory),
+      alpaka::mem::view::getPtrNative(destinationDeviceMemory),
+      n,
+      func));
 
-    // enqueue both kernel execution tasks
-    alpaka::queue::enqueue(queue, taskKernelReduceMain);
-    alpaka::queue::enqueue(queue, taskKernelReduceLastBlock);
+  // create last block reduction kernel execution task
+  auto const taskKernelReduceLastBlock(alpaka::kernel::createTaskKernel<acc_t>(
+      workDiv2,
+      kernel2,
+      alpaka::mem::view::getPtrNative(destinationDeviceMemory),
+      alpaka::mem::view::getPtrNative(destinationDeviceMemory),
+      blockCount,
+      func));
 
-    //  download result from GPU
-    T resultGpuHost;
-    auto resultGpuDevice =
-        alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
-            &resultGpuHost, devHost, static_cast<Extent>(blockSize));
+  // enqueue both kernel execution tasks
+  alpaka::queue::enqueue(queue, taskKernelReduceMain);
+  alpaka::queue::enqueue(queue, taskKernelReduceLastBlock);
 
-    alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, 1);
+  //  download result from GPU
+  T    resultGpuHost;
+  auto resultGpuDevice =
+      alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
+          &resultGpuHost, devHost, static_cast<Extent>(blockSize));
 
-    return resultGpuHost;
+  alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, 1);
+
+  return resultGpuHost;
+}
+
+namespace alpaka {
+namespace kernel {
+namespace traits {
+template <typename T, typename TFunc, typename TAcc>
+struct BlockSharedMemDynSizeBytes<DReduceKernel<T, TFunc>, TAcc> {
+  template <typename TVec, typename TElem, typename TIdx>
+  ALPAKA_FN_HOST_ACC static auto getBlockSharedMemDynSizeBytes(
+      DReduceKernel<T, TFunc> const &kern,
+      TVec const &                   blockThreadExtent,
+      TVec const &                   threadElemExtent,
+      TElem const *const,
+      TElem *,
+      TIdx const &,
+      TFunc)
+  {
+		// We have one result per thread
+    return static_cast<idx::Idx<TAcc>>(
+        sizeof(TElem) * blockThreadExtent.prod());
+  }
+};
+}
+}
+}
+
+template <
+    typename T,
+    typename DevHost,
+    typename Entity,
+    typename QueueAcc,
+    typename HostBuf,
+    typename TFunc>
+T dreduce(
+    DevHost  devHost,
+    Entity   entity,
+    QueueAcc queue,
+    uint64_t n,
+    HostBuf  hostMemory,
+    TFunc    func)
+{
+  using dev_t = typename Entity::dev_t;
+  using acc_t = typename Entity::acc_t;
+
+  const auto device = entity.device();
+
+  using Dim    = alpaka::dim::DimInt<1u>;
+  using Idx    = uint64_t;
+  using Extent = uint64_t;
+
+  alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> sourceDeviceMemory =
+      alpaka::mem::buf::alloc<T, Idx>(device, n);
+
+  auto workDiv = dash::MephWorkDiv<Entity>::getOptimal(entity, n);
+  auto blockCount =
+      alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(workDiv)[0];
+
+  alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> destinationDeviceMemory =
+      alpaka::mem::buf::alloc<T, Idx>(
+          device, static_cast<Extent>(blockCount));
+
+  // copy the data to the GPU
+  alpaka::mem::view::copy(queue, sourceDeviceMemory, hostMemory, n);
+
+  // create kernels with their workdivs
+  DReduceKernel<T, TFunc> kernel1;
+
+  // create main reduction kernel execution task
+  auto const taskKernelReduceMain(alpaka::kernel::createTaskKernel<acc_t>(
+      workDiv,
+      kernel1,
+      alpaka::mem::view::getPtrNative(sourceDeviceMemory),
+      alpaka::mem::view::getPtrNative(destinationDeviceMemory),
+      n,
+      func));
+
+  // enqueue both kernel execution tasks
+  alpaka::queue::enqueue(queue, taskKernelReduceMain);
+
+  //  download result from GPU
+  T    resultGpuHost;
+  auto resultGpuDevice =
+      alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
+          &resultGpuHost, devHost, static_cast<Extent>(blockCount));
+
+  alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, 1);
+
+  return resultGpuHost;
 }

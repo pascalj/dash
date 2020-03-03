@@ -99,17 +99,6 @@ T transform_reduce(
       &root);
 }
 
-namespace internal {
-template <typename BinaryOp, typename UnaryOp>
-struct transform_reduce_kernel {
-
-  template <typename TAcc>
-  void operator()(const TAcc& acc) const
-  {
-  }
-};
-}
-
 template <
     class Executor,
     class InputIt,
@@ -123,25 +112,26 @@ transform_reduce(
     Executor&& executor,
     InputIt    in_first,
     InputIt    in_last,
-    T          init,
+    const T    init,
     BinaryOp   binary_op,
     UnaryOp    unary_op)
 {
   auto& pattern = in_first.pattern();
 
   using executor_t  = typename std::decay<Executor>::type;
-  using kernel_t    = internal::transform_reduce_kernel<BinaryOp, UnaryOp>;
   using pattern_t   = typename InputIt::pattern_type;
   using shape_t     = typename pattern_t::viewspec_type;
-  using dim         = alpaka::dim::DimInt<pattern.ndim()>;
+  using dim         = alpaka::dim::DimInt<pattern_t::ndim()>;
   using acc_t       = typename executor_t::acc_t;
   using dev_t       = typename executor_t::dev_t;
   using value_type  = typename InputIt::value_type;
-  using result_type = double;
+  // FIXME: evaluate from binary_op
+  using result_type = uint64_t;
+
+
+  std::vector<result_type> results{};
 
   auto& queue       = executor.sync_queue();
-
-  std::vector<result_type> results;
 
   for (auto& entity : executor.entities()) {
     for (auto& block : pattern.blocks_local_for_entity(entity)) {
@@ -149,39 +139,64 @@ transform_reduce(
         continue;
       }
 
-      // 1. create workdiv from block
       auto extents = alpaka::vec::
           createVecFromIndexedFnWorkaround<dim, std::size_t, arr_to_vec>(
               block.extents());
-      int nblocks = 1;
-
-      if (char* blocks_override = getenv("NBLOCKS")) {
-        nblocks = atoi(blocks_override);
-      }
-      auto thread_extent = alpaka::vec::
-          createVecFromIndexedFnWorkaround<dim, std::size_t, unity_vec>(
-              static_cast<std::size_t>(block.size() / nblocks));
-
-      auto offsets = block.offsets();
-
-      alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
-          alpaka::workdiv::getValidWorkDiv<acc_t>(
-              entity.device(), extents, thread_extent, false)};
 
       // 2. create host buffer
       // FIXME: this assumes first == pattern.first()
+      auto offsets = block.offsets();
       auto block_begin = in_first + pattern.local_at(offsets);
-
       assert(block_begin.is_local());
 
       auto host = alpaka::dev::DevCpu{
           alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
       auto host_buf = alpaka::mem::view::createStaticDevMemView(
           block_begin.local(), host, extents);
-
-      mreduce<result_type, acc_t>(host, entity.device(), queue, block.size(), host_buf, binary_op);
+      auto result = dreduce<result_type>(
+          host, entity, queue, block.size(), host_buf, binary_op);
+      results.push_back(result);
     }
+    alpaka::wait::wait(queue);
   }
+
+  using local_result_t = struct dash::internal::local_result<result_type>;
+  local_result_t local_result;
+  local_result_t global_result;
+
+  local_result.value = std::accumulate(results.begin(), results.end(), init, binary_op);
+  local_result.valid = true;
+
+  dart_operation_t dop =
+      dash::internal::dart_reduce_operation<BinaryOp>::value;
+  dart_datatype_t dtype = dash::dart_storage<result_type>::dtype;
+
+  if (dop == DART_OP_UNDEFINED || dtype == DART_TYPE_UNDEFINED) {
+    dart_type_create_custom(sizeof(local_result_t), &dtype);
+
+    // we need a custom reduction operation because not every unit
+    // may have valid values
+    dart_op_create(
+        &dash::internal::reduce_custom_fn<result_type, BinaryOp>,
+        &binary_op,
+        true,
+        dtype,
+        true,
+        &dop);
+    dart_allreduce(&local_result, &global_result, 1, dtype, dop, pattern.team().dart_id());
+    dart_op_destroy(&dop);
+    dart_type_destroy(&dtype);
+  } else {
+    // ideal case: we can use DART predefined reductions
+    dart_allreduce(
+        &local_result.value,
+        &global_result.value,
+        1,
+        dtype,
+        dop,
+        pattern.team().dart_id());
+  }
+  return global_result.value;
 }
 
 }  // namespace dash

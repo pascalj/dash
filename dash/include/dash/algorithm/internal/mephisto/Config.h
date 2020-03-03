@@ -26,18 +26,6 @@ using Idx = uint64_t;
 using Extent = uint64_t;
 using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Extent>;
 
-//-----------------------------------------------------------------------------
-//! Returns the supplied number or the maxumim number of threads per block for a
-//! specific accelerator.
-//!
-//! \tparam TAcc The accelerator object.
-//! \tparam TSize The desired size.
-template <typename TAcc, uint64_t TSize>
-static constexpr uint64_t getMaxBlockSize()
-{
-    return (TAcc::MaxBlockSize::value > TSize) ? TSize
-                                               : TAcc::MaxBlockSize::value;
-}
 
 //#############################################################################
 //! Get Trait via struct.

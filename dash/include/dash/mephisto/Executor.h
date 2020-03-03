@@ -9,16 +9,14 @@ struct AlpakaExecutor {
   using acc_t         = typename Entity::acc_t;
   using dev_t         = typename Entity::dev_t;
   using pltf_t        = typename Entity::pltf_t;
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
-  using sync_queue_t  = alpaka::queue::QueueCudaRtBlocking;
-  using async_queue_t = alpaka::queue::QueueCudaRtNonBlocking;
-#else
-  using sync_queue_t  = alpaka::queue::QueueCpuBlocking;
-  using async_queue_t = alpaka::queue::QueueCpuNonBlocking;
-#endif
+  using sync_queue_t  = alpaka::queue::Queue<dev_t, alpaka::queue::Blocking>;
+  using async_queue_t =
+      alpaka::queue::Queue<dev_t, alpaka::queue::NonBlocking>;
+
+
 
   AlpakaExecutor()
-    : _sync_queue(alpaka::pltf::getDevByIdx<pltf_t>(0u))
+    : _sync_queue(alpaka::pltf::getDevByIdx<pltf_t>(0u)), _async_queue(alpaka::pltf::getDevByIdx<pltf_t>(0u))
   {
   }
 
@@ -30,12 +28,12 @@ struct AlpakaExecutor {
     return Entity::all();
   }
 
-  /* async_queue_t& async_queue() { */
-  /*   return _async_queue; */
-  /* } */
+  async_queue_t& async_queue() {
+    return _async_queue;
+  }
 
 private:
-  /* async_queue_t _async_queue; */
+  async_queue_t _async_queue;
   sync_queue_t _sync_queue;
 };
 
