@@ -3,7 +3,7 @@
 
 #include <alpaka/alpaka.hpp>
 #include <cstddef>
-#ifdef ALPAKA_ACC_CPU_B_SEQ_T_OMP2_ENABLED
+#if defined(ALPAKA_ACC_CPU_B_SEQ_T_OMP2_ENABLED) | defined(ALPAKA_ACC_CPU_BT_OMP4_ENABLED)
 #include <omp.h>
 #endif
 
@@ -50,7 +50,12 @@ struct Entity {
   }
 
   auto concurrency() const {
-    return alpaka::acc::getAccDevProps<acc_t, dev_t>(device()).m_blockThreadCountMax * 4;
+#ifdef _OPENMP
+    return omp_get_max_threads();
+#else
+		// recommended by ALPAKA
+    return alpaka::acc::getAccDevProps<acc_t, dev_t>(device()).m_blockThreadCountMax * 8;
+#endif
   }
 
 
@@ -98,7 +103,7 @@ struct BalancedThreadStrategy {
         alpaka::vec::Vec<typename Entity::alpaka_dim_t, std::size_t>;
     // For threads, we want a small amount of blocks with a large amount of
     // elements per thread.
-    auto blockThreadExtent = vec_t::all(omp_get_max_threads());
+    auto blockThreadExtent = vec_t::all(entity.concurrency());
     vec_t threadElementExtent((nelems / blockThreadExtent[0]) + 1);
     auto gridBlockExtent = vec_t::all(1);
     return alpaka::workdiv::
@@ -127,6 +132,15 @@ using CpuOmp2Entity = Entity<Size, alpaka::acc::AccCpuOmp2Threads>;
 
 template<std::size_t Size>
 struct MephWorkDiv<CpuOmp2Entity<Size>> : public BalancedThreadStrategy<CpuOmp2Entity<Size>> {};
+
+#endif  
+
+#ifdef ALPAKA_ACC_CPU_BT_OMP4_ENABLED
+template <std::size_t Size>
+using CpuOmp4Entity = Entity<Size, alpaka::acc::AccCpuOmp4>;
+
+template<std::size_t Size>
+struct MephWorkDiv<CpuOmp4Entity<Size>> : public BalancedThreadStrategy<CpuOmp4Entity<Size>> {};
 
 #endif  
 
