@@ -398,9 +398,6 @@ T dreduce(
   using Idx    = uint64_t;
   using Extent = uint64_t;
 
-  alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> sourceDeviceMemory =
-      alpaka::mem::buf::alloc<T, Idx>(device, n);
-
   auto workDiv = dash::MephWorkDiv<Entity>::getOptimal(entity, n);
   auto blockCount =
       alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(workDiv)[0];
@@ -410,7 +407,17 @@ T dreduce(
           device, static_cast<Extent>(blockCount));
 
   // copy the data to the GPU
-  alpaka::mem::view::copy(queue, sourceDeviceMemory, hostMemory, n);
+ 
+  T* input; 
+  if(false) { // no unified memory
+    alpaka::mem::buf::Buf<dev_t, T, Dim, Extent> sourceDeviceMemory =
+      alpaka::mem::buf::alloc<T, Idx>(device, n);
+    alpaka::mem::view::copy(queue, sourceDeviceMemory, hostMemory, n);
+    input = alpaka::mem::view::getPtrNative(sourceDeviceMemory);
+  } else {
+    input = alpaka::mem::view::getPtrNative(hostMemory);
+  }
+        
 
   // create kernels with their workdivs
   DReduceKernel<T, TFunc> kernel1;
@@ -419,7 +426,7 @@ T dreduce(
   auto const taskKernelReduceMain(alpaka::kernel::createTaskKernel<acc_t>(
       workDiv,
       kernel1,
-      alpaka::mem::view::getPtrNative(sourceDeviceMemory),
+      input,
       alpaka::mem::view::getPtrNative(destinationDeviceMemory),
       n,
       func));
