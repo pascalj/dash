@@ -235,6 +235,8 @@ public:
     DASH_LOG_TRACE("TilePattern<1>()", "TilePattern initialized");
   }
 
+  
+
   /**
    * Constructor, initializes a pattern from explicit instances of
    * \c SizeSpec, \c DistributionSpec and a \c Team.
@@ -797,6 +799,11 @@ public:
    */
   constexpr BlockSpec_t blockspec() const {
     return BlockSpec_t({ dash::math::div_ceil(_size, _blocksize) });
+  }
+
+  constexpr BlockSpec_t local_blockspec() const
+  {
+    return BlockSpec_t({_nlblocks});
   }
 
   /**
