@@ -422,25 +422,32 @@ T dreduce(
   // create kernels with their workdivs
   DReduceKernel<T, TFunc> kernel1;
 
+  auto destination = alpaka::mem::view::getPtrNative(destinationDeviceMemory);
   // create main reduction kernel execution task
   auto const taskKernelReduceMain(alpaka::kernel::createTaskKernel<acc_t>(
       workDiv,
       kernel1,
       input,
-      alpaka::mem::view::getPtrNative(destinationDeviceMemory),
+      destination,
       n,
       func));
 
   // enqueue both kernel execution tasks
   alpaka::queue::enqueue(queue, taskKernelReduceMain);
 
-  //  download result from GPU
-  T    resultGpuHost;
+  //  Block results
+  std::vector<T>    resultsGpuHost;
+  resultsGpuHost.resize(blockCount);
   auto resultGpuDevice =
       alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
-          &resultGpuHost, devHost, static_cast<Extent>(blockCount));
+          resultsGpuHost.data(), devHost, static_cast<Extent>(blockCount));
 
-  alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, 1);
+   alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, blockCount);
 
-  return resultGpuHost;
+  T result = 0;
+  for (size_t i = 0; i < blockCount; i++) {
+    result += resultsGpuHost[i];
+  }
+
+  return result;
 }

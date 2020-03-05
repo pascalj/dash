@@ -53,7 +53,7 @@ struct Entity {
 #ifdef _OPENMP
     return omp_get_max_threads();
 #else
-		// recommended by ALPAKA
+    // recommended by ALPAKA
     return alpaka::acc::getAccDevProps<acc_t, dev_t>(device()).m_blockThreadCountMax * 8;
 #endif
   }
@@ -112,6 +112,34 @@ struct BalancedThreadStrategy {
   }
 };
 
+template <typename Entity>
+struct GpuStrategy {
+  static auto getOptimal(const Entity &entity, const size_t nelems)
+  {
+    using acc_t = typename Entity::acc_t;
+    using dev_t = typename Entity::dev_t;
+    using vec_t =
+        alpaka::vec::Vec<typename Entity::alpaka_dim_t, std::size_t>;
+
+    constexpr uint32_t blockSize = 256;
+
+    uint32_t blockCount = static_cast<uint32_t>(
+        alpaka::acc::getAccDevProps<acc_t, dev_t>(entity.device()).m_multiProcessorCount *
+        8);
+    uint32_t maxBlockCount = static_cast<uint32_t>(
+        (((nelems + 1) / 2) - 1) / blockSize + 1); // ceil(ceil(n/2.0)/blockSize)
+
+    if (blockCount > maxBlockCount)
+        blockCount = maxBlockCount;
+    
+    auto gridBlockExtent = vec_t::all(blockCount);
+    auto blockThreadExtent = vec_t::all(blockSize);
+    auto threadElementExtent = vec_t::all(1u);
+
+    return alpaka::workdiv::WorkDivMembers<typename Entity::alpaka_dim_t, std::size_t>(gridBlockExtent, blockThreadExtent, threadElementExtent);
+  }
+};
+
 /**
  * Convenience entities
  */
@@ -147,6 +175,9 @@ struct MephWorkDiv<CpuOmp4Entity<Size>> : public BalancedThreadStrategy<CpuOmp4E
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 template<std::size_t Size>
 using CudaEntity = Entity<Size, alpaka::acc::AccGpuUniformCudaHipRt>;
+
+template<std::size_t Size>
+struct MephWorkDiv<CudaEntity<Size>> : public GpuStrategy<CudaEntity<Size>> {};
 #endif
 
 }  // namespace dash
