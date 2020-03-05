@@ -381,13 +381,14 @@ template <
     typename QueueAcc,
     typename HostBuf,
     typename TFunc>
-T dreduce(
-    DevHost  devHost,
-    Entity   entity,
-    QueueAcc queue,
-    uint64_t n,
-    HostBuf  hostMemory,
-    TFunc    func)
+void dreduce(
+    std::promise<T> *promise,
+    DevHost          devHost,
+    Entity           entity,
+    QueueAcc &       queue,
+    uint64_t         n,
+    HostBuf          hostMemory,
+    TFunc            func)
 {
   using dev_t = typename Entity::dev_t;
   using acc_t = typename Entity::acc_t;
@@ -435,19 +436,24 @@ T dreduce(
   // enqueue both kernel execution tasks
   alpaka::queue::enqueue(queue, taskKernelReduceMain);
 
-  //  Block results
-  std::vector<T>    resultsGpuHost;
-  resultsGpuHost.resize(blockCount);
-  auto resultGpuDevice =
-      alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
-          resultsGpuHost.data(), devHost, static_cast<Extent>(blockCount));
+  std::thread t([devHost, destinationDeviceMemory, blockCount, &queue, promise] {
+    //  Block results
+    std::vector<T> results;
+    results.resize(blockCount);
+    auto result_ptr =
+        alpaka::mem::view::ViewPlainPtr<DevHost, T, Dim, Idx>(
+            results.data(), devHost, static_cast<Extent>(blockCount));
 
-   alpaka::mem::view::copy(queue, resultGpuDevice, destinationDeviceMemory, blockCount);
+    alpaka::mem::view::copy(
+        queue, result_ptr, destinationDeviceMemory, blockCount);
+    alpaka::wait::wait(queue);
 
-  T result = 0;
-  for (size_t i = 0; i < blockCount; i++) {
-    result += resultsGpuHost[i];
-  }
-
-  return result;
+    T result = 0;
+    for (size_t i = 0; i < blockCount; i++) {
+      alpaka::wait::wait(queue);
+      result += results[i];
+    }
+    promise->set_value(result);
+  });
+  t.detach();
 }

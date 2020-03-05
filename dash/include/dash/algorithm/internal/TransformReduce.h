@@ -129,11 +129,12 @@ transform_reduce(
   using result_type = uint64_t;
 
 
-  std::vector<result_type> results{};
+  std::vector<std::promise<result_type>> results{};
+  results.reserve(1024);
 
-  auto& queue       = executor.sync_queue();
 
   for (auto& entity : executor.entities()) {
+    auto& queue       = executor.async_queue(entity);
     for (auto& block : pattern.blocks_local_for_entity(entity)) {
       if (block.size() == 0) {
         continue;
@@ -153,18 +154,24 @@ transform_reduce(
           alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
       auto host_buf = alpaka::mem::view::createStaticDevMemView(
           block_begin.local(), host, extents);
-      auto result = dreduce<result_type>(
-          host, entity, queue, block.size(), host_buf, binary_op);
-      results.push_back(result);
+      results.emplace_back();
+      dreduce<result_type>(
+          std::addressof(results.back()), host, entity, queue, block.size(), host_buf, binary_op);
     }
-    alpaka::wait::wait(queue);
   }
 
   using local_result_t = struct dash::internal::local_result<result_type>;
   local_result_t local_result;
   local_result_t global_result;
 
-  local_result.value = std::accumulate(results.begin(), results.end(), init, binary_op);
+  local_result.value = std::accumulate(
+      results.begin(),
+      results.end(),
+      init,
+      [binary_op](auto accum, auto& promise) {
+        auto fut = promise.get_future();
+        return binary_op(accum, fut.get());
+      });
   local_result.valid = true;
 
   dart_operation_t dop =
