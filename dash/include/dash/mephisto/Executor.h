@@ -13,6 +13,7 @@ struct AlpakaExecutor {
   using sync_queue_t  = alpaka::queue::Queue<dev_t, alpaka::queue::Blocking>;
   using async_queue_t =
       alpaka::queue::Queue<dev_t, alpaka::queue::NonBlocking>;
+  using host_queue_t = alpaka::queue::Queue<dev_t, alpaka::queue::NonBlocking>;
 
   AlpakaExecutor() = default;
 
@@ -36,9 +37,23 @@ struct AlpakaExecutor {
     return Entity::all();
   }
 
+  auto host_entity() {
+    constexpr auto dim = Entity::NDim;
+    using host_entity_t = CpuOmp4Entity<dim>;
+    return host_entity_t{0};
+  }
+
+  host_queue_t& host_queue() {
+    if(host_queue == nullptr) {
+      _host_queue = std::make_unique(host_queue_t{0});
+    }
+    return *_host_queue;
+  }
+
 private:
   std::unordered_map<int, async_queue_t> _async_queues;
   std::unordered_map<int, sync_queue_t> _sync_queues;
+  std::unique_ptr<host_queue_t> _host_queue;
 };
 
 template<typename T>

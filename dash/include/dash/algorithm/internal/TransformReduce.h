@@ -132,9 +132,43 @@ transform_reduce(
   std::vector<std::promise<result_type>> results{};
   results.reserve(1024);
 
+#if 0
+  auto host_entity = executor.host_entity();
+  auto host_queue = executor.host_queue();
+
+  for (auto& block : pattern.blocks_local_for_host_entity()) {
+    if (block.size() == 0) {
+      continue;
+    }
+      auto extents = alpaka::vec::
+          createVecFromIndexedFnWorkaround<dim, std::size_t, arr_to_vec>(
+              block.extents());
+
+      // 2. create host buffer
+      // this assumes first == pattern.first()
+      auto offsets     = block.offsets();
+      auto block_begin = in_first + pattern.local_at(offsets);
+      assert(block_begin.is_local());
+
+      auto host = alpaka::dev::DevCpu{
+          alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
+      auto host_buf = alpaka::mem::view::createStaticDevMemView(
+          block_begin.local(), host, extents);
+      results.emplace_back();
+      dreduce<result_type>(
+          std::addressof(results.back()),
+          host,
+          entity,
+          queue,
+          block.size(),
+          host_buf,
+          binary_op);
+    }
+  }
+#endif
 
   for (auto& entity : executor.entities()) {
-    auto& queue       = executor.async_queue(entity);
+    auto& queue = executor.async_queue(entity);
     for (auto& block : pattern.blocks_local_for_entity(entity)) {
       if (block.size() == 0) {
         continue;
@@ -145,8 +179,8 @@ transform_reduce(
               block.extents());
 
       // 2. create host buffer
-      // FIXME: this assumes first == pattern.first()
-      auto offsets = block.offsets();
+      // this assumes first == pattern.first()
+      auto offsets     = block.offsets();
       auto block_begin = in_first + pattern.local_at(offsets);
       assert(block_begin.is_local());
 
@@ -156,7 +190,13 @@ transform_reduce(
           block_begin.local(), host, extents);
       results.emplace_back();
       dreduce<result_type>(
-          std::addressof(results.back()), host, entity, queue, block.size(), host_buf, binary_op);
+          std::addressof(results.back()),
+          host,
+          entity,
+          queue,
+          block.size(),
+          host_buf,
+          binary_op);
     }
   }
 

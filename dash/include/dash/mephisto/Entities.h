@@ -58,7 +58,6 @@ struct Entity {
 #endif
   }
 
-
   static auto all()
   {
     std::vector<Entity> entities;
