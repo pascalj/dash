@@ -150,7 +150,9 @@ using CpuSerialEntity = Entity<Size, alpaka::acc::AccCpuSerial>;
 #ifdef ALPAKA_ACC_CPU_B_SEQ_T_THREADS_ENABLED
 template<std::size_t Size>
 using CpuThreadEntity = Entity<Size, alpaka::acc::AccCpuThreads>;
-struct MephWorkDiv<CpuSerialEntity<Size>> : public BalancedThreadStrategy<CpuThreadEntity<Size>> {};
+
+template<std::size_t Size>
+struct MephWorkDiv<CpuThreadEntity<Size>> : public BalancedThreadStrategy<CpuThreadEntity<Size>> {};
 #endif
 
 #ifdef ALPAKA_ACC_CPU_B_SEQ_T_OMP2_ENABLED
