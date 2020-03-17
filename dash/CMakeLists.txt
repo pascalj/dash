@@ -1,4 +1,4 @@
-project(project_dash_libdash CXX CUDA)
+project(project_dash_libdash CXX)
 
 # Load global build settings
 set(DASH_DART_IF_INCLUDE_DIR ${DASH_DART_IF_INCLUDE_DIR}

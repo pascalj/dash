@@ -37,6 +37,8 @@ struct AlpakaExecutor {
     return Entity::all();
   }
 
+
+#if 0
   auto host_entity() {
     constexpr auto dim = Entity::NDim;
     using host_entity_t = CpuOmp4Entity<dim>;
@@ -49,11 +51,12 @@ struct AlpakaExecutor {
     }
     return *_host_queue;
   }
+#endif
 
 private:
   std::unordered_map<int, async_queue_t> _async_queues;
   std::unordered_map<int, sync_queue_t> _sync_queues;
-  std::unique_ptr<host_queue_t> _host_queue;
+  /* std::unique_ptr<host_queue_t> _host_queue; */
 };
 
 template<typename T>
