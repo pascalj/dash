@@ -155,11 +155,9 @@ struct ReduceKernel
 //! \tparam TBlockSize The block size.
 //! \tparam T The data type.
 //! \tparam TFunc The Functor type for the reduction function.
-template <typename T, typename TFunc>
+template <typename T, typename UnaryFunc, typename BinaryFunc>
 struct DReduceKernel
 {
-    ALPAKA_NO_HOST_ACC_WARNING
-
     //-----------------------------------------------------------------------------
     //! The kernel entry point.
     //!
@@ -173,13 +171,15 @@ struct DReduceKernel
     //! \param n The problem size.
     //! \param func The reduction function.
     template <typename TAcc, typename TElem, typename TIdx>
-    ALPAKA_FN_ACC auto operator()(TAcc const &acc,
-                                  TElem const *const source,
-                                  TElem *destination,
-                                  TIdx const &n,
-                                  TFunc func) const -> void
+    ALPAKA_FN_ACC auto operator()(
+        TAcc const &       acc,
+        TElem const *const source,
+        TElem *            destination,
+        TIdx const &       n,
+        UnaryFunc          unary_func,
+        BinaryFunc         binary_func) const -> void
     {
-      auto * const sdata = alpaka::block::shared::dyn::getMem<T>(acc);
+      auto *const sdata = alpaka::block::shared::dyn::getMem<T>(acc);
 
       const uint32_t blockIndex(static_cast<uint32_t>(
           alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0]));
@@ -188,7 +188,8 @@ struct DReduceKernel
       const uint32_t gridDimension(static_cast<uint32_t>(
           alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0]));
       const uint32_t blockSize(static_cast<uint32_t>(
-          alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0]));
+          alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(
+              acc)[0]));
 
       // equivalent to blockIndex * TBlockSize + threadIndex
       const uint32_t linearizedIndex(static_cast<uint32_t>(
@@ -200,8 +201,8 @@ struct DReduceKernel
       T result = 0;  // suppresses compiler warnings
 
       if (threadIndex < n)
-        result = *(it++);  // avoids using the
-                           // neutral element of specific
+        result = unary_func(*(it++));  // avoids using the
+                                       // neutral element of specific
 
       // --------
       // Level 1: grid reduce, reading from global memory
@@ -212,54 +213,56 @@ struct DReduceKernel
       // advances by grid-striding loop (maybe 128bit load improve perf)
 
       while (it + 3 < it.end()) {
-        result = func(
-            func(func(result, func(*it, *(it + 1))), *(it + 2)), *(it + 3));
+        result = binary_func(
+            binary_func(
+                binary_func(
+                    result,
+                    binary_func(unary_func(*it), unary_func(*(it + 1)))),
+                unary_func(*(it + 2))),
+            unary_func(*(it + 3)));
         it += 4;
-        }
+      }
 
-        // doing the remaining blocks
-        while (it < it.end())
-            result = func(result, *(it++));
+      // doing the remaining blocks
+      while (it < it.end()) result = binary_func(result, unary_func(*(it++)));
 
-        if (threadIndex < n)
-            sdata[threadIndex] = result;
+      if (threadIndex < n) sdata[threadIndex] = result;
+
+      alpaka::block::sync::syncBlockThreads(acc);
+
+      // --------
+      // Level 2: block + warp reduce, reading from shared memory
+      // --------
+
+      ALPAKA_UNROLL()
+      for (uint32_t currentBlockSize = blockSize,
+                    currentBlockSizeUp =
+                        (blockSize + 1) / 2;  // ceil(TBlockSize/2.0)
+           currentBlockSize > 1;
+           currentBlockSize            = currentBlockSize / 2,
+                    currentBlockSizeUp = (currentBlockSize + 1) /
+                                         2)  // ceil(currentBlockSize/2.0)
+      {
+        bool cond =
+            threadIndex < currentBlockSizeUp  // only first half of block
+                                              // is working
+            && (threadIndex + currentBlockSizeUp) <
+                   blockSize  // index for second half must be in bounds
+            &&
+            (blockIndex * blockSize + threadIndex + currentBlockSizeUp) < n &&
+            threadIndex <
+                n;  // if elem in second half has been initialized before
+
+        if (cond)
+          sdata[threadIndex] = binary_func(
+              sdata[threadIndex], sdata[threadIndex + currentBlockSizeUp]);
 
         alpaka::block::sync::syncBlockThreads(acc);
+      }
 
-        // --------
-        // Level 2: block + warp reduce, reading from shared memory
-        // --------
-
-        ALPAKA_UNROLL()
-        for (uint32_t currentBlockSize = blockSize,
-                      currentBlockSizeUp =
-                          (blockSize + 1) / 2; // ceil(TBlockSize/2.0)
-             currentBlockSize > 1;
-             currentBlockSize = currentBlockSize / 2,
-                      currentBlockSizeUp = (currentBlockSize + 1) /
-                                           2) // ceil(currentBlockSize/2.0)
-        {
-            bool cond =
-                threadIndex < currentBlockSizeUp // only first half of block
-                                                 // is working
-                && (threadIndex + currentBlockSizeUp) <
-                       blockSize // index for second half must be in bounds
-                && (blockIndex * blockSize + threadIndex +
-                    currentBlockSizeUp) < n &&
-                threadIndex <
-                    n; // if elem in second half has been initialized before
-
-            if (cond)
-                sdata[threadIndex] =
-                    func(sdata[threadIndex],
-                         sdata[threadIndex + currentBlockSizeUp]);
-
-            alpaka::block::sync::syncBlockThreads(acc);
-        }
-
-        // store block result to gmem
-        if (threadIndex == 0 && threadIndex < n)
-            destination[blockIndex] = sdata[0];
+      // store block result to gmem
+      if (threadIndex == 0 && threadIndex < n)
+        destination[blockIndex] = sdata[0];
     }
 };
 
@@ -353,16 +356,17 @@ T mreduce(
 namespace alpaka {
 namespace kernel {
 namespace traits {
-template <typename T, typename TFunc, typename TAcc>
-struct BlockSharedMemDynSizeBytes<DReduceKernel<T, TFunc>, TAcc> {
+template <typename T, typename UnaryFunc, typename TFunc, typename TAcc>
+struct BlockSharedMemDynSizeBytes<DReduceKernel<T, UnaryFunc, TFunc>, TAcc> {
   template <typename TVec, typename TElem, typename TIdx>
   ALPAKA_FN_HOST_ACC static auto getBlockSharedMemDynSizeBytes(
-      DReduceKernel<T, TFunc> const &kern,
-      TVec const &                   blockThreadExtent,
-      TVec const &                   threadElemExtent,
+      DReduceKernel<T, UnaryFunc, TFunc> const &kern,
+      TVec const &                              blockThreadExtent,
+      TVec const &                              threadElemExtent,
       TElem const *const,
       TElem *,
       TIdx const &,
+      UnaryFunc,
       TFunc)
   {
 		// We have one result per thread
@@ -380,7 +384,8 @@ template <
     typename Entity,
     typename QueueAcc,
     typename HostBuf,
-    typename TFunc>
+    typename UnaryFunc,
+    typename BinaryFunc>
 void dreduce(
     std::promise<T> *promise,
     DevHost          devHost,
@@ -388,7 +393,8 @@ void dreduce(
     QueueAcc &       queue,
     uint64_t         n,
     HostBuf          hostMemory,
-    TFunc            func)
+    UnaryFunc        unary_func,
+    BinaryFunc       binary_func)
 {
   using dev_t = typename Entity::dev_t;
   using acc_t = typename Entity::acc_t;
@@ -421,7 +427,7 @@ void dreduce(
         
 
   // create kernels with their workdivs
-  DReduceKernel<T, TFunc> kernel1;
+  DReduceKernel<T, UnaryFunc, BinaryFunc> kernel1;
 
   auto destination = alpaka::mem::view::getPtrNative(destinationDeviceMemory);
   // create main reduction kernel execution task
@@ -431,7 +437,8 @@ void dreduce(
       input,
       destination,
       n,
-      func));
+      unary_func,
+      binary_func));
 
   // enqueue both kernel execution tasks
   alpaka::queue::enqueue(queue, taskKernelReduceMain);

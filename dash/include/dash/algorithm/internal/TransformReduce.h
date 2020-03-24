@@ -196,6 +196,7 @@ transform_reduce(
           queue,
           block.size(),
           host_buf,
+          unary_op,
           binary_op);
     }
   }
