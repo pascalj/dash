@@ -423,10 +423,16 @@ void dreduce(
     input = alpaka::mem::view::getPtrNative(sourceDeviceMemory);
   } else {
     input = alpaka::mem::view::getPtrNative(hostMemory);
+#ifdef CUDACC
+      auto mdev = queue.m_spQueueImpl->m_dev.m_iDevice;
+      cudaMemPrefetchAsync(input, n*sizeof(T), mdev, NULL);
+#endif
+
   }
         
 
   // create kernels with their workdivs
+  //
   DReduceKernel<T, UnaryFunc, BinaryFunc> kernel1;
 
   auto destination = alpaka::mem::view::getPtrNative(destinationDeviceMemory);

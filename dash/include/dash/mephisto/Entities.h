@@ -120,7 +120,7 @@ struct GpuStrategy {
     using vec_t =
         alpaka::vec::Vec<typename Entity::alpaka_dim_t, std::size_t>;
 
-    constexpr uint32_t blockSize = 256;
+    constexpr uint32_t blockSize = 1024;
 
     uint32_t blockCount = static_cast<uint32_t>(
         alpaka::acc::getAccDevProps<acc_t, dev_t>(entity.device()).m_multiProcessorCount *
